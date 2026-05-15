@@ -84,7 +84,7 @@ Backup and restore your entire KHackBar configuration with a single click:
 
 ---
 
-## 🎨 Enhanced Visual Identity (v1.5+)
+## 🎨 Enhanced Visual Identity (v1.3+)
 
 The extension has been fully re-skinned with a **Red Team / Hacker aesthetic** and further optimized for a professional experience:
 - 🔴 Dark red and black color palette (`#dc2626`, `#1a1a2e`, `#0f0f1a`)
