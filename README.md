@@ -1,0 +1,231 @@
+# 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
+
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v1.3+ Pro**
+
+**KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
+
+---
+
+## 🔥 Key Features
+
+### 📦 Advanced Payload Library
+Categorized payloads for rapid injection testing across multiple attack vectors:
+
+| Category | Description |
+|----------|-------------|
+| **SQLi** | Advanced DIOS & WAF bypass strings for database fingerprinting and exploitation |
+| **XSS** | Cross-Site Scripting vectors (reflected, stored, DOM-based) |
+| **LFI** | Local File Inclusion traversal sequences and wrappers |
+| **SSRF** | Cloud metadata endpoints, protocol smuggling (Gopher / Dict) |
+| **SSTI** | Server-Side Template Injection payloads (Jinja2, Twig, etc.) |
+| **NoSQL** | NoSQL authentication bypass and injection vectors |
+| **OSCI** | Operating System Command Injection payloads for RCE testing |
+
+### 🧪 Custom Header Injection
+Leverages the **`declarativeNetRequest`** API to:
+- Bypass restrictive security headers (`Content-Security-Policy`, `X-Frame-Options`, etc.)
+- Spoof request origins and `Referer` headers
+- Inject custom headers on-the-fly for testing backend validation logic
+
+### 🍪 Interactive Cookie Editor
+View, edit, create, and delete cookies in real-time using the **`cookies`** API:
+- Inspect all cookies for the current domain
+- Modify cookie values, paths, expiration, and security flags
+- Instantly apply changes to test session handling and authentication flows
+
+### 🌐 Versatile POST Execution
+Craft and send HTTP POST requests directly from the extension with support for:
+- **JSON** (`application/json`)
+- **URL-encoded** (`application/x-www-form-urlencoded`)
+- **Multipart** (`multipart/form-data`)
+
+### 🔐 Encoders & Decoders
+Built-in encoding/decoding tools for quick payload transformation:
+- **Hex** encode/decode
+- **Base64** encode/decode
+- **HTML Entity** encode/decode
+- **Unicode** escape/unescape
+- **URL** encode/decode
+
+---
+
+## 🚀 New Pro Features (v1.3+)
+
+### 🖱️ Right-Click Context Menu
+Supercharge your workflow with instant right-click access:
+- Right-click on **any input field** or **highlighted text** on a web page to open the KHackBar context menu
+- **Inject Payloads** directly into input fields without manually copying/pasting
+- **Base64 Encode/Decode** selected text on the fly
+- Streamlines testing by eliminating context-switching between tabs
+
+### ⚡ Automated Fuzzer / Repeater
+The new **Fuzzer** tab turns KHackBar into a powerful automated testing engine:
+- Use the `[FUZZ]` marker in your target URL to designate the injection point
+- Paste multiple payloads (one per line) into the payloads text area
+- Click **Start Fuzzing** to automatically fire each payload at the target
+- **Real-time logs** display Status Code and Response Length for each request
+- Instantly spot anomalies (different status codes, unusual response sizes) that signal vulnerabilities
+- Click **Clear Results** to reset the output panel
+
+### 🎯 Target Scoping & Safety
+Prevent accidental testing on unauthorized domains with the new **Scoping** feature:
+- Found under the **Settings** tab
+- Add allowed domains to your scope list (e.g., `*.example.com`)
+- Enable scoping to block requests to any domain not in your allowed list
+- Adds a crucial safety layer during live engagements — no more embarrassing misfires on production systems
+- Scope rules are persisted via the `storage` API and survive browser restarts
+
+### 💾 Configuration Management
+Backup and restore your entire KHackBar configuration with a single click:
+- **Export** saves all your headers, scope rules, and settings as a downloadable **JSON** file
+- **Import** restores a previously exported configuration from a JSON file
+- Perfect for team collaboration — share standardized configs across your red team
+- No more re-entering custom headers or scope rules between sessions
+
+---
+
+## 🎨 Enhanced Visual Identity (v1.5+)
+
+The extension has been fully re-skinned with a **Red Team / Hacker aesthetic** and further optimized for a professional experience:
+- 🔴 Dark red and black color palette (`#dc2626`, `#1a1a2e`, `#0f0f1a`)
+- ⚡ Optimized **inline SVG icons** for a lightweight, crisp experience
+- 🖥️ Distracted-font-style status indicators and terminal-inspired UI elements
+- 🧩 **Dedicated panels** for Fuzzing, Headers, Cookies, and Settings — keeping the interface clean and organized
+- 🚫 No external dependencies — all assets are bundled within the extension
+
+---
+
+## 📦 Installation Guide
+
+### Step 1: Download or Clone
+```bash
+git clone https://github.com/KhitMinnyo/KHackBar.git
+cd KHackBar
+```
+
+### Step 2: Open Chrome Extensions
+Open Google Chrome and navigate to:
+```
+chrome://extensions/
+```
+
+### Step 3: Enable Developer Mode
+Toggle **"Developer mode"** in the top right corner of the Extensions page.
+
+### Step 4: Load Unpacked
+Click **"Load unpacked"** and select the project folder (`KHackBar`).
+
+### Step 5: Pin to Toolbar
+Click the puzzle piece icon (Extensions menu) in the Chrome toolbar, find **KHackBar**, and click the pin icon 📌 to pin it for quick access.
+
+---
+
+## 🚀 How to Use
+
+### Basic Usage
+1. **Click the KHackBar icon** in your Chrome toolbar to open the Side Panel.
+2. **Navigate to a target website** — the extension will activate automatically.
+3. **Select an attack vector** from the payload library dropdown.
+4. **Inject, encode, or modify** requests using the built-in tools.
+5. **Inspect and manipulate cookies** in the Cookie Editor tab.
+6. **Execute POST requests** with custom headers and body types.
+
+### 🔒 Setting Up Scope (Before Starting a Pentest)
+1. Open the **Settings** tab in the KHackBar side panel.
+2. In the **Target Scope** section, add domains you are authorized to test (e.g., `*.example.com` or `https://testsite.local/*`).
+3. Toggle scoping **ON** to activate the restriction.
+4. Any request to a domain **not** in your scope list will be blocked — keeping your testing safe and compliant.
+5. Scope rules are automatically saved and will persist across browser sessions.
+
+### 🔁 Using the Fuzzer with `[FUZZ]` Syntax
+1. Navigate to the **Fuzzer** tab.
+2. In the **Target URL** field, enter your URL with `[FUZZ]` as the injection marker.  
+   *Example:* `https://example.com/page?id=[FUZZ]&debug=false`
+3. In the **Payloads** text area, enter one payload per line.  
+   *Example:*  
+   ```
+   1' OR '1'='1
+   1" OR 1=1--
+   <script>alert(1)</script>
+   ```
+4. Click **Start Fuzzing** to begin. The results panel will show real-time logs with **Status Code** and **Response Length** for each payload.
+5. Review the results — payloads that produce unique responses (different status codes or response sizes) are worth investigating further.
+6. Click **Clear Results** to reset before your next round.
+
+> ⚡ **Pro Tip:** Combine Header Injection with custom payloads to bypass WAFs and test edge-case server logic.
+
+---
+
+## 💻 Technical Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Browser** | Google Chrome (v88+ recommended) |
+| **Manifest** | Manifest V3 |
+| **Permissions** | `tabs`, `activeTab`, `scripting`, `sidePanel`, `storage`, `cookies`, `declarativeNetRequest`, `contextMenus` |
+| **Permissions** | `sidePanel` — to operate within Chrome's Side Panel UI |
+| **Permissions** | `storage` — for persisting scope rules, headers, and configuration data |
+| **Permissions** | `contextMenus` — for right-click context menu integration |
+| **Host Access** | `<all_urls>` — required for payload injection and network request modification |
+
+---
+
+## ⚠️ Professional Disclaimer
+
+> **This tool is for authorized penetration testing and educational purposes only.**
+>
+> Unauthorized use of this extension against systems you do not own or have explicit written permission to test is **illegal** and **unethical**. The developers assume **no liability** for any misuse or damage caused by this software.
+>
+> By using KHackBar, you agree to:
+> - Only test systems you own or have written authorization to test
+> - Comply with all applicable local, state, and federal laws
+> - Use the tool responsibly and ethically in accordance with industry best practices (e.g., OWASP, PTES)
+
+---
+
+## 🧬 Repository Structure
+
+```
+KHackBar/
+├── manifest.json          # Chrome Extension Manifest V3 config
+├── background.js          # Service worker for background tasks
+├── popup.html             # Side Panel UI markup
+├── popup.js               # Main initializer
+├── payloads.js            # Payload library definitions
+├── ui.js                  # UI rendering, menu switching, DOM helpers
+├── scope.js               # Target scope validation
+├── audit.js               # Audit log storage and rendering helpers
+├── fuzzer.js              # Fuzzer / repeater logic
+├── headers.js             # Custom header management
+├── cookies.js             # Cookie viewer/editor logic
+├── settings.js            # Scope, config import/export, audit settings
+└── README.md              # Documentation
+```
+
+---
+
+## 🧩 Modular Architecture
+
+KHackBar follows a clean modular architecture to keep the codebase organized and maintainable:
+
+| Module | Responsibility |
+|--------|---------------|
+| **`popup.js`** | Application initializer — wires together all modules on startup |
+| **`payloads.js`** | Defines the categorized payload library (SQLi, XSS, LFI, etc.) |
+| **`ui.js`** | Handles UI rendering, menu switching, DOM manipulation helpers |
+| **`scope.js`** | Validates target URLs against the allowed scope list |
+| **`audit.js`** | Manages audit log storage and renders audit entries |
+| **`fuzzer.js`** | Implements the automated fuzzer / repeater engine |
+| **`headers.js`** | Manages custom header injection via `declarativeNetRequest` |
+| **`cookies.js`** | Provides cookie viewing, editing, and creation logic |
+| **`settings.js`** | Handles scope configuration, config import/export, and audit settings |
+
+Each module encapsulates a distinct feature domain and communicates through well-defined interfaces. This separation of concerns improves maintainability, makes testing easier, and significantly reduces the risk of large single-file bugs — such as the critical XSS vulnerability that was recently patched in the HTML encoder.
+
+---
+
+<p align="center">
+  <sub>Crafted with 🩸 for the Red Team community.</sub>
+  <br>
+  <sub>🔴 **KHackBar** — Audit hard. Stay legal.</sub>
+</p>

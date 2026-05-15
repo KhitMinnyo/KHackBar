@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "KHackBar",
+  "version": "1.5",
+  "permissions": ["tabs", "activeTab", "scripting", "sidePanel", "storage", "cookies", "declarativeNetRequest", "contextMenus"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "action": {
+    "default_title": "Open KHackBar Side Panel"
+  },
+  "icons": {
+  "16": "KHackBar.png",
+  "48": "KHackBar.png",
+  "128": "KHackBar.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http: https:; object-src 'none'; frame-ancestors 'none';"
+  }
+}

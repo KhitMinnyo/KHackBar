@@ -1,0 +1,10 @@
+- [x] Refactor ui.js - Add namespace bootstrap, attach UI functions and encoder
+- [x] Refactor scope.js - Attach to KHackBar.Scope namespace
+- [x] Refactor audit.js - Attach to KHackBar.Audit namespace
+- [x] Refactor cookies.js - Attach to KHackBar.Cookies namespace
+- [x] Refactor headers.js - Attach to KHackBar.Headers namespace
+- [x] Refactor fuzzer.js - Attach to KHackBar.Fuzzer namespace, update cross-module calls
+- [x] Refactor settings.js - Attach to KHackBar.Settings namespace, update cross-module calls
+- [x] Refactor popup.js - Use namespace references for all module access
+- [x] Remove dead standalone `sanitizeHTML()` from ui.js
+- [x] Verify extension loads without console errors
