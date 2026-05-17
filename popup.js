@@ -155,24 +155,17 @@ document.addEventListener('DOMContentLoaded', function () {
   // 3. LOAD / SPLIT / EXECUTE / POST buttons
   // ============================================================
 
-  // LOAD: Send the URL to the active tab
+  // LOAD: Read the current active tab URL into urlBox (no navigation)
   if (btnLoad) {
     btnLoad.onclick = function () {
-      var target = urlBox.value.replace(/\n/g, '').trim();
-      if (!target) {
-        setStatus('[!] URL box is empty.');
-        return;
-      }
-      // Check scope
-      KHackBar.Scope.getSavedScope(function (scopePattern) {
-        var scopeCheck = KHackBar.Scope.checkScope(target, scopePattern);
-        if (!scopeCheck.allowed) {
-          setStatus('[!] ' + scopeCheck.reason);
-          return;
+      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        if (tabs && tabs[0] && tabs[0].url) {
+          urlBox.value = tabs[0].url;
+          setStatus('[+] URL loaded from active tab.');
+          logAudit('load', tabs[0].url, 'URL loaded into urlBox from active tab');
+        } else {
+          setStatus('[!] No active tab or URL found.');
         }
-        chrome.tabs.update({ url: target });
-        setStatus('[+] Loaded: ' + target);
-        logAudit('load', target, 'URL loaded into tab');
       });
     };
   }
