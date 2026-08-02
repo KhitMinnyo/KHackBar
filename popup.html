@@ -249,7 +249,7 @@
     <circle cx="12" cy="12" r="3"/>
     <circle cx="12" cy="12" r="1" fill="#dc2626"/>
   </svg>
-  <h3>KHackBar v1.5 Pro</h3>
+  <h3>KHackBar v1.8 Pro</h3>
 </div>
 <div class="menu-bar">
   <div class="menu-item" id="menu_sql">BASIC</div>
@@ -317,6 +317,14 @@
       POST
     </button>
   </div>
+  <div style="display:flex; align-items:center; gap:6px; margin-top:6px; width:100%;">
+    <label style="display:flex; align-items:center; gap:4px; font-size:10px; color:#ef4444; cursor:pointer; user-select:none;">
+      <input type="checkbox" id="chk_capture_post" style="cursor:pointer;">
+      🔴 Auto-capture POST from active tab (like Burp)
+    </label>
+    <button id="btn_load_last_capture" class="small-btn" style="font-size:9px; margin-left:auto;">Load last capture</button>
+  </div>
+  <div id="capture_post_status" style="width:100%; font-size:10px; color:#a3a3a3; margin-top:2px;"></div>
 </div>
 <div class="encoding-bar">
   <button class="small-btn" id="btn_enc_url">URL</button>
@@ -391,8 +399,15 @@
   <div id="cookies_status" style="width:100%; font-size:10px; color:#ef4444; margin-top:4px;"></div>
 </div>
 <div id="fuzzer_panel" class="panel" style="display:none; flex-direction:column;">
-  <div style="width:100%; margin-bottom:6px; font-size:10px; color:#ef4444;">Target URL (use <b>[FUZZ]</b> as injection marker):</div>
-  <input type="text" id="fuzzer_url" placeholder="e.g. https://example.com/page?id=[FUZZ]" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:12px; outline:none; font-family:inherit; margin-bottom:6px;">
+  <div style="width:100%; margin-bottom:6px; font-size:10px; color:#ef4444;">Target URL (use <b>FUZZ</b> or <b>[FUZZ]</b> as injection marker):</div>
+  <input type="text" id="fuzzer_url" placeholder="e.g. https://example.com/page?id=FUZZ" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:12px; outline:none; font-family:inherit; margin-bottom:6px;">
+  <div style="width:100%; margin-bottom:6px; font-size:10px; color:#ef4444;">Load default payloads:</div>
+  <div style="display:flex; gap:4px; width:100%; margin-bottom:6px;">
+    <select id="fuzzer_preset" class="content-type-select">
+      <option value="">-- choose a preset --</option>
+    </select>
+    <button id="btn_fuzzer_load_preset" class="action-btn" style="font-size:11px; flex:0 0 auto;">Load</button>
+  </div>
   <div style="width:100%; margin-bottom:6px; font-size:10px; color:#ef4444;">Payloads (one per line):</div>
   <textarea id="fuzzer_payloads" placeholder="1' OR '1'='1&#10;1&#34; OR 1=1-- -&#10;&#60;script&#62;alert(1)&#60;/script&#62;" style="width:100%; height:100px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:11px; outline:none; font-family:inherit; resize:vertical;"></textarea>
   <div style="display:flex; gap:4px; width:100%; margin-top:6px;">
@@ -449,6 +464,8 @@
 <script src="config.js"></script>
 <script src="payloads.js"></script>
 <script src="ui.js"></script>
+<script src="waf.js"></script>
+<script src="union.js"></script>
 <script src="scope.js"></script>
 <script src="audit.js"></script>
 <script src="cookies.js"></script>

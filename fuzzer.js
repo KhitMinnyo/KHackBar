@@ -24,6 +24,8 @@ if (!window.KHackBar.Scope) {
  * @param {HTMLElement} opts.btnFuzzerStart - Start button element
  * @param {HTMLElement} opts.btnFuzzerStop - Stop button element
  * @param {HTMLElement} opts.btnFuzzerClear - Clear button element
+ * @param {HTMLElement} [opts.fuzzerPreset] - Preset <select> element
+ * @param {HTMLElement} [opts.btnFuzzerLoadPreset] - Load preset button element
  * @param {HTMLElement} opts.status - Status text element
  * @param {function} opts.logAudit - Audit logging function (action, target, details)
  */
@@ -34,13 +36,71 @@ window.KHackBar.Fuzzer.init = function (opts) {
   var btnFuzzerStart = opts.btnFuzzerStart;
   var btnFuzzerStop = opts.btnFuzzerStop;
   var btnFuzzerClear = opts.btnFuzzerClear;
+  var fuzzerPreset = opts.fuzzerPreset;
+  var btnFuzzerLoadPreset = opts.btnFuzzerLoadPreset;
   var status = opts.status;
   var logAudit = opts.logAudit || function () {};
 
   if (!fuzzerUrl || !fuzzerPayloads || !fuzzerResults || !btnFuzzerStart) return;
 
+  // ---- Default payload presets (directory fuzzing, SQLi, XSS, etc.) ----
+  // Lets the user load a ready-made wordlist instead of typing/pasting
+  // payloads by hand every time.
+  if (fuzzerPreset && btnFuzzerLoadPreset && window.KHackBar.Payloads && window.KHackBar.Payloads.fuzzerPresets) {
+    window.KHackBar.Payloads.fuzzerPresets.forEach(function (preset) {
+      var opt = document.createElement('option');
+      opt.value = preset.id;
+      opt.textContent = preset.label + ' (' + preset.list.length + ')';
+      fuzzerPreset.appendChild(opt);
+    });
+
+    btnFuzzerLoadPreset.onclick = function () {
+      var presetId = fuzzerPreset.value;
+      if (!presetId) {
+        window.KHackBar.UI.setText(status, '[!] Choose a preset first.');
+        return;
+      }
+      var preset = window.KHackBar.Payloads.fuzzerPresets.filter(function (p) { return p.id === presetId; })[0];
+      if (!preset) return;
+
+      fuzzerPayloads.value = preset.list.join('\n');
+      window.KHackBar.UI.setText(status, '[+] Loaded ' + preset.list.length + ' payloads: ' + preset.label + ' (replaced previous content).');
+      logAudit('fuzzer_load_preset', presetId, 'Loaded ' + preset.list.length + ' payloads (' + preset.label + ')');
+    };
+  }
+
   var fuzzerAbortController = null;
   var fuzzerStopped = false;
+
+  // Fuzz requests are sent via the background service worker rather than
+  // fetch() directly from this page. A fetch() called here is subject to
+  // this page's own CORS handling and silently fails against most
+  // cross-origin targets; the background worker can use the extension's
+  // host_permissions to fetch any origin reliably (the same reason
+  // execute_post in background.js already worked this way).
+  function sendFuzzRequest(url, timeoutMs) {
+    return new Promise(function (resolve) {
+      chrome.runtime.sendMessage({ type: 'fuzz_request', url: url, timeout: timeoutMs }, function (response) {
+        if (chrome.runtime.lastError) {
+          resolve({ success: false, error: chrome.runtime.lastError.message });
+          return;
+        }
+        resolve(response || { success: false, error: 'No response from background worker.' });
+      });
+    });
+  }
+
+  // Accept both the bracketed "[FUZZ]" marker (HackBar-style) and a bare
+  // "FUZZ" marker (ffuf-style, case-insensitive) — many users coming from
+  // other fuzzing tools type the URL as ".../id=FUZZ" with no brackets and
+  // were getting rejected even though that's a perfectly standard
+  // convention. Returns the exact substring to replace, or null if no
+  // marker is present at all.
+  function findFuzzMarker(url) {
+    if (url.indexOf('[FUZZ]') !== -1) return '[FUZZ]';
+    var match = url.match(/FUZZ/i);
+    return match ? match[0] : null;
+  }
 
   // ---- Start Fuzzing ----
   btnFuzzerStart.onclick = async function () {
@@ -48,15 +108,15 @@ window.KHackBar.Fuzzer.init = function (opts) {
     var payloadText = fuzzerPayloads.value.trim();
 
     if (!baseUrl) {
-      window.KHackBar.UI.setText(status, '[!] Please enter a target URL with [FUZZ] marker.');
+      window.KHackBar.UI.setText(status, '[!] Please enter a target URL with a FUZZ marker.');
       return;
     }
     if (!payloadText) {
       window.KHackBar.UI.setText(status, '[!] Please enter payloads (one per line).');
       return;
     }
-    if (baseUrl.indexOf('[FUZZ]') === -1) {
-      window.KHackBar.UI.setText(status, '[!] URL must contain [FUZZ] marker.');
+    if (!findFuzzMarker(baseUrl)) {
+      window.KHackBar.UI.setText(status, '[!] URL must contain a FUZZ marker, e.g. .../page?id=FUZZ or .../page?id=[FUZZ].');
       return;
     }
 
@@ -78,6 +138,14 @@ window.KHackBar.Fuzzer.init = function (opts) {
 
     if (payloads.length === 0) {
       window.KHackBar.UI.setText(status, '[!] No valid payloads found.');
+      return;
+    }
+
+    var marker = findFuzzMarker(baseUrl);
+    if (!marker) {
+      // Already validated before doFuzz was called, but guard here too
+      // in case baseUrl is ever passed in some other way in the future.
+      window.KHackBar.UI.setText(status, '[!] URL must contain a FUZZ marker.');
       return;
     }
 
@@ -110,7 +178,7 @@ window.KHackBar.Fuzzer.init = function (opts) {
       if (signal.aborted) break;
 
       var payload = payloads[i];
-      var fuzzedUrl = baseUrl.replace('[FUZZ]', encodeURIComponent(payload));
+      var fuzzedUrl = baseUrl.replace(marker, encodeURIComponent(payload));
 
       var resultDiv = document.createElement('div');
       resultDiv.style.padding = '3px';
@@ -131,29 +199,21 @@ window.KHackBar.Fuzzer.init = function (opts) {
       resultDiv.appendChild(statusSpan);
       fuzzerResults.appendChild(resultDiv);
 
-      // Set timeout via AbortController signal with configurable timeout per request
-      var timeoutId = setTimeout(function () {
-        if (fuzzerAbortController) fuzzerAbortController.abort();
-      }, window.KHackBar.Config.REQUEST_TIMEOUT);
-
       try {
-        var response = await fetch(fuzzedUrl, {
-          signal: signal,
-          method: 'GET'
-        });
-        clearTimeout(timeoutId);
-
-        statusSpan.textContent = ' [' + response.status + ' ' + response.statusText + ']';
-        statusSpan.style.color = response.ok ? '#22c55e' : '#ef4444';
-      } catch (err) {
-        clearTimeout(timeoutId);
-        if (err.name === 'AbortError') {
-          statusSpan.textContent = ' [Aborted]';
+        var response = await sendFuzzRequest(fuzzedUrl, window.KHackBar.Config.REQUEST_TIMEOUT);
+        if (response && response.success) {
+          statusSpan.textContent = ' [' + response.status + ' ' + response.statusText + ' | ' + response.length + ' bytes]';
+          statusSpan.style.color = (response.status >= 200 && response.status < 400) ? '#22c55e' : '#ef4444';
+        } else if (response && response.aborted) {
+          statusSpan.textContent = ' [Timeout]';
           statusSpan.style.color = '#f59e0b';
         } else {
-          statusSpan.textContent = ' [Error: ' + err.message + ']';
+          statusSpan.textContent = ' [Error: ' + (response && response.error ? response.error : 'Unknown error') + ']';
           statusSpan.style.color = '#ef4444';
         }
+      } catch (err) {
+        statusSpan.textContent = ' [Error: ' + err.message + ']';
+        statusSpan.style.color = '#ef4444';
       }
 
       fuzzerResults.scrollTop = fuzzerResults.scrollHeight;

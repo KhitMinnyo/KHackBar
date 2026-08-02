@@ -1,6 +1,6 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v1.3+ Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v1.8 Pro**
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -49,6 +49,42 @@ Built-in encoding/decoding tools for quick payload transformation:
 
 ---
 
+## 🆕 What's New in v1.8
+
+### 🎣 POST Capture (Burp-style auto-fill)
+Check **🔴 Auto-capture POST from active tab** below the POST fields, then just use the site normally (e.g. log in) — the exact request shows up automatically:
+- Watches POST requests from the active tab only (form submissions and fetch/XHR calls), via read-only `webRequest` observation — it never blocks, delays, or modifies the real request
+- Auto-fills the URL, POST data, and (where recognizable) the content-type dropdown
+- The last capture is saved, so **Load last capture** can restore it even if the panel was closed when it happened
+- Turn the toggle off when you don't need it — capture only runs while enabled
+
+### 🛡️ Rebuilt WAF Bypass Panel
+The **WAF-BYPASS** tab no longer just inserts fixed strings — it now wraps whatever text you select in the URL box:
+- Select a keyword (e.g. `UNION SELECT`) and click a technique (`/*!{{SEL}}*/`, whitespace/encoding swaps, case randomizer, etc.) to wrap or transform it in place
+- Grouped into Comment Injection, Keyword Bypass, Concat Bypass, Whitespace/Encoding, Case/Numeric, and One-Shot Extraction sections
+- No selection? Wrap buttons insert a pre-selected `STRING` placeholder you can type straight over
+
+### 🎯 Column-Count-Aware UNION Generator
+The **UNION** tab is now a generator instead of a fixed `1,2,3...` list:
+- Enter the column count you found (e.g. via an `ORDER BY` probe) and it builds matching `UNION SELECT` payloads
+- Mark specific column positions as text/string instead of numeric (important for strict engines like PostgreSQL)
+- Drop a raw extraction function into a specific column via **Column overrides** (e.g. `2:database(),3:@@version`)
+- Generates variants for common injection contexts: numeric, `'`, `"`, `')`, `")`, `'))`, and comment styles
+
+### 🔧 Fuzzer Reliability Fixes
+- Fuzz requests are now routed through the background service worker (like POST already was), fixing silent failures against cross-origin targets
+- Response length is now shown alongside status code, as originally intended
+- The target URL now accepts a bare `FUZZ` marker (ffuf-style) in addition to `[FUZZ]` — no more silent rejection for URLs without brackets
+- **Load default payloads** dropdown adds ready-made wordlists (directory/file fuzzing, SQLi, XSS, LFI, NoSQL, SSTI, OSCI, SSRF, Blind SQLi) so you're not stuck typing or pasting payloads by hand
+
+### 🐘 Corrected PostgreSQL DIOS Technique
+**PostgreSQL DIOS** previously reused MySQL's `COUNT()`/`RAND()` GROUP BY duplicate-key error trick with Postgres function names swapped in — a technique that's specific to MySQL's implementation and doesn't actually error the same way on PostgreSQL. It's been replaced with genuine Postgres error-based extraction via `CAST(...AS int)` type-cast errors, so **MySQL DIOS**, **PostgreSQL DIOS**, and **LocDIOS** are now meaningfully different techniques rather than the same boilerplate under three headings.
+
+### 🖱️ Menu Display Fix
+Category menus (including WAF) could silently fail to open on click due to a state-tracking bug in the toggle logic. Fixed so every menu opens/closes reliably.
+
+---
+
 ## 🚀 New Pro Features (v1.3+)
 
 ### 🖱️ Right-Click Context Menu
@@ -60,7 +96,8 @@ Supercharge your workflow with instant right-click access:
 
 ### ⚡ Automated Fuzzer / Repeater
 The new **Fuzzer** tab turns KHackBar into a powerful automated testing engine:
-- Use the `[FUZZ]` marker in your target URL to designate the injection point
+- Use a `FUZZ` or `[FUZZ]` marker in your target URL to designate the injection point (both styles are accepted, case-insensitive)
+- Load a default wordlist (directory/file fuzzing, SQLi, XSS, LFI, NoSQL, SSTI, OSCI, SSRF, Blind SQLi) from the **Load default payloads** dropdown instead of typing/pasting your own
 - Paste multiple payloads (one per line) into the payloads text area
 - Click **Start Fuzzing** to automatically fire each payload at the target
 - **Real-time logs** display Status Code and Response Length for each request
@@ -137,11 +174,11 @@ Click the puzzle piece icon (Extensions menu) in the Chrome toolbar, find **KHac
 4. Any request to a domain **not** in your scope list will be blocked — keeping your testing safe and compliant.
 5. Scope rules are automatically saved and will persist across browser sessions.
 
-### 🔁 Using the Fuzzer with `[FUZZ]` Syntax
+### 🔁 Using the Fuzzer with `FUZZ` / `[FUZZ]` Syntax
 1. Navigate to the **Fuzzer** tab.
-2. In the **Target URL** field, enter your URL with `[FUZZ]` as the injection marker.  
-   *Example:* `https://example.com/page?id=[FUZZ]&debug=false`
-3. In the **Payloads** text area, enter one payload per line.  
+2. In the **Target URL** field, enter your URL with `FUZZ` or `[FUZZ]` as the injection marker (both work).  
+   *Example:* `https://example.com/page?id=FUZZ&debug=false`
+3. In the **Payloads** text area, enter one payload per line, or pick a ready-made list from the **Load default payloads** dropdown (directory/file fuzzing, SQLi, XSS, LFI, NoSQL, SSTI, OSCI, SSRF, Blind SQLi) instead of typing your own.  
    *Example:*  
    ```
    1' OR '1'='1
@@ -162,10 +199,11 @@ Click the puzzle piece icon (Extensions menu) in the Chrome toolbar, find **KHac
 |-------------|---------|
 | **Browser** | Google Chrome (v88+ recommended) |
 | **Manifest** | Manifest V3 |
-| **Permissions** | `tabs`, `activeTab`, `scripting`, `sidePanel`, `storage`, `cookies`, `declarativeNetRequest`, `contextMenus` |
+| **Permissions** | `tabs`, `activeTab`, `scripting`, `sidePanel`, `storage`, `cookies`, `declarativeNetRequest`, `contextMenus`, `webRequest` |
 | **Permissions** | `sidePanel` — to operate within Chrome's Side Panel UI |
 | **Permissions** | `storage` — for persisting scope rules, headers, and configuration data |
 | **Permissions** | `contextMenus` — for right-click context menu integration |
+| **Permissions** | `webRequest` — read-only observation used by POST Capture (non-blocking; never modifies traffic) |
 | **Host Access** | `<all_urls>` — required for payload injection and network request modification |
 
 ---
@@ -193,6 +231,8 @@ KHackBar/
 ├── popup.js               # Main initializer
 ├── payloads.js            # Payload library definitions
 ├── ui.js                  # UI rendering, menu switching, DOM helpers
+├── waf.js                 # WAF Bypass panel (selection-based wrap/transform templates)
+├── union.js               # UNION SELECT generator (column-count aware)
 ├── scope.js               # Target scope validation
 ├── audit.js               # Audit log storage and rendering helpers
 ├── fuzzer.js              # Fuzzer / repeater logic
@@ -213,6 +253,8 @@ KHackBar follows a clean modular architecture to keep the codebase organized and
 | **`popup.js`** | Application initializer — wires together all modules on startup |
 | **`payloads.js`** | Defines the categorized payload library (SQLi, XSS, LFI, etc.) |
 | **`ui.js`** | Handles UI rendering, menu switching, DOM manipulation helpers |
+| **`waf.js`** | Renders the WAF Bypass panel — wraps/transforms the URL box selection using bypass templates instead of inserting fixed strings |
+| **`union.js`** | Renders the UNION panel — asks for column count and text-column positions, generates matching `UNION SELECT` payloads |
 | **`scope.js`** | Validates target URLs against the allowed scope list |
 | **`audit.js`** | Manages audit log storage and renders audit entries |
 | **`fuzzer.js`** | Implements the automated fuzzer / repeater engine |

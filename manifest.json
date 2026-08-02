@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "KHackBar",
-  "version": "1.5",
-  "permissions": ["tabs", "activeTab", "scripting", "sidePanel", "storage", "cookies", "declarativeNetRequest", "contextMenus"],
+  "version": "1.8",
+  "permissions": ["tabs", "activeTab", "scripting", "sidePanel", "storage", "cookies", "declarativeNetRequest", "contextMenus", "webRequest"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"

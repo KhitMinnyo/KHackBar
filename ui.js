@@ -29,6 +29,95 @@ window.KHackBar.UI.insertAtCursor = function (textarea, text) {
 };
 
 /**
+ * Wrap the currently selected text in a textarea/input with a template.
+ * Used by the WAF panel: a template like "/*!{{SEL}}*\/" turns a selection
+ * of "UNION SELECT" into "/*!UNION SELECT*\/". If the template has no
+ * {{SEL}} marker, the selection is simply replaced by the template
+ * (useful for fixed keyword-obfuscation swaps, e.g. selecting "ORDER BY"
+ * and replacing it with "/**\/ORDER/**\/BY/**\/").
+ * If nothing is selected, the template is inserted at the cursor with the
+ * {{SEL}} portion replaced by a "STRING" placeholder that is immediately
+ * selected, so the user can type over it right away.
+ * @param {HTMLElement} textarea
+ * @param {string} template
+ */
+window.KHackBar.UI.wrapSelectionWithTemplate = function (textarea, template) {
+  if (!textarea) return;
+  var value = textarea.value;
+  // Clamp defensively in case callers ever pass stale/out-of-range indices.
+  var start = Math.max(0, Math.min(textarea.selectionStart, value.length));
+  var end = Math.max(start, Math.min(textarea.selectionEnd, value.length));
+  var selectedText = value.substring(start, end);
+  var hasMarker = template.indexOf('{{SEL}}') !== -1;
+  var insertText;
+  var placeholderInserted = false;
+
+  if (selectedText) {
+    insertText = template.split('{{SEL}}').join(selectedText);
+  } else if (hasMarker) {
+    insertText = template.split('{{SEL}}').join('STRING');
+    placeholderInserted = true;
+  } else {
+    insertText = template;
+  }
+
+  textarea.value = value.substring(0, start) + insertText + value.substring(end);
+
+  if (placeholderInserted) {
+    var markerIndex = insertText.indexOf('STRING');
+    if (markerIndex !== -1) {
+      textarea.selectionStart = start + markerIndex;
+      textarea.selectionEnd = start + markerIndex + 'STRING'.length;
+    } else {
+      textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
+    }
+  } else {
+    textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
+  }
+  textarea.focus();
+};
+
+/**
+ * Apply a pure string transform function to the currently selected text
+ * in a textarea/input, replacing the selection with the result.
+ * Returns false (and does nothing) if there is no selection, since a
+ * transform has nothing to operate on.
+ * @param {HTMLElement} textarea
+ * @param {function(string): string} fn
+ * @returns {boolean} whether the transform was applied
+ */
+window.KHackBar.UI.transformSelection = function (textarea, fn) {
+  if (!textarea) return false;
+  var value = textarea.value;
+  var start = Math.max(0, Math.min(textarea.selectionStart, value.length));
+  var end = Math.max(start, Math.min(textarea.selectionEnd, value.length));
+  if (start === end) return false;
+  var selected = value.substring(start, end);
+  var replaced = fn(selected);
+  textarea.value = value.substring(0, start) + replaced + value.substring(end);
+  textarea.selectionStart = start;
+  textarea.selectionEnd = start + replaced.length;
+  textarea.focus();
+  return true;
+};
+
+/**
+ * Randomize the case of the currently selected text (a classic WAF
+ * bypass technique against case-sensitive signature matching).
+ * @param {HTMLElement} textarea
+ * @returns {boolean} whether the randomization was applied
+ */
+window.KHackBar.UI.randomizeCaseInSelection = function (textarea) {
+  return window.KHackBar.UI.transformSelection(textarea, function (str) {
+    return str.split('').map(function (ch) {
+      if (/[a-z]/.test(ch)) return Math.random() < 0.5 ? ch.toUpperCase() : ch;
+      if (/[A-Z]/.test(ch)) return Math.random() < 0.5 ? ch.toLowerCase() : ch;
+      return ch;
+    }).join('');
+  });
+};
+
+/**
  * Create a payload button element.
  * @param {string} label - Button text
  * @param {string} payload - Payload value to insert

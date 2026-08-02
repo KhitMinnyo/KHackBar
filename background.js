@@ -152,6 +152,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'set_capture_post_enabled') {
+    capturePostEnabled = !!message.enabled;
+    chrome.storage.local.set({ capture_post_enabled: capturePostEnabled });
+    sendResponse({ success: true, enabled: capturePostEnabled });
+    return false;
+  }
+
   if (message.type === 'execute_post') {
     fetch(message.url, {
       method: 'POST',
@@ -169,6 +176,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
       .catch((err) => {
         sendResponse({ success: false, error: err.message });
+      });
+    return true; // keep channel open for async sendResponse
+  }
+
+  // ---- Fuzzer requests ----
+  // The Fuzzer used to call fetch() directly from the side panel page,
+  // which is subject to that page's own CORS handling and could silently
+  // fail against cross-origin targets. Routing it through the background
+  // service worker (like execute_post above) uses the extension's
+  // host_permissions to fetch cross-origin reliably.
+  if (message.type === 'fuzz_request') {
+    const controller = new AbortController();
+    const timeoutMs = message.timeout || 30000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    fetch(message.url, { method: 'GET', signal: controller.signal })
+      .then(async (response) => {
+        clearTimeout(timeoutId);
+        const responseText = await response.text();
+        sendResponse({
+          success: true,
+          status: response.status,
+          statusText: response.statusText,
+          length: responseText.length
+        });
+      })
+      .catch((err) => {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+          sendResponse({ success: false, aborted: true, error: 'Timed out after ' + timeoutMs + 'ms' });
+        } else {
+          sendResponse({ success: false, error: err.message });
+        }
       });
     return true; // keep channel open for async sendResponse
   }
@@ -228,3 +268,130 @@ async function applyHeaderRules(urlPattern, headers) {
     addRules: [rule]
   });
 }
+
+// ---------- POST Capture (Burp-style auto-fill) ----------
+// When enabled via the toggle in the POST section, watches POST requests
+// made by the currently active tab (form submissions, fetch/XHR calls) and
+// pushes the URL + body + content-type to the side panel so it can
+// auto-fill the POST fields — e.g. log into a site normally in the browser
+// and the exact request shows up in KHackBar without manual copy/paste.
+//
+// This only OBSERVES traffic via the non-blocking webRequest API (MV3
+// still fully supports this — only the *blocking* variant is restricted),
+// it never modifies or delays the real request.
+let capturePostEnabled = false;
+let activeTabId = null;
+const pendingPostCaptures = new Map(); // requestId -> { url, body, reconstructed, timeStamp }
+
+chrome.storage.local.get(['capture_post_enabled'], (result) => {
+  capturePostEnabled = !!result.capture_post_enabled;
+});
+
+chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+  if (tabs && tabs[0]) activeTabId = tabs[0].id;
+});
+chrome.tabs.onActivated.addListener((info) => {
+  activeTabId = info.tabId;
+});
+
+/**
+ * Reconstruct a readable body string from webRequest's requestBody details.
+ * Native <form> submissions (the common login-form case) populate
+ * `formData`; fetch()/XHR calls with a raw body (e.g. JSON) populate `raw`.
+ */
+function decodePostBody(requestBody) {
+  if (!requestBody) return null;
+
+  if (requestBody.formData) {
+    const parts = [];
+    for (const key in requestBody.formData) {
+      requestBody.formData[key].forEach((value) => {
+        parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(value));
+      });
+    }
+    return { body: parts.join('&'), reconstructed: true };
+  }
+
+  if (requestBody.raw && requestBody.raw.length > 0) {
+    try {
+      const decoder = new TextDecoder('utf-8');
+      const text = requestBody.raw
+        .filter((chunk) => chunk.bytes)
+        .map((chunk) => decoder.decode(chunk.bytes))
+        .join('');
+      return { body: text, reconstructed: false };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function cleanupStalePostCaptures() {
+  const cutoff = Date.now() - 30000;
+  for (const [id, entry] of pendingPostCaptures) {
+    if (entry.timeStamp < cutoff) pendingPostCaptures.delete(id);
+  }
+}
+
+chrome.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    if (!capturePostEnabled) return;
+    if (details.method !== 'POST') return;
+    if (details.tabId !== activeTabId) return;
+
+    cleanupStalePostCaptures();
+
+    const decoded = decodePostBody(details.requestBody);
+    if (!decoded) return;
+
+    pendingPostCaptures.set(details.requestId, {
+      url: details.url,
+      body: decoded.body,
+      reconstructed: decoded.reconstructed,
+      timeStamp: details.timeStamp || Date.now()
+    });
+  },
+  { urls: ['<all_urls>'], types: ['main_frame', 'sub_frame', 'xmlhttprequest'] },
+  ['requestBody']
+);
+
+chrome.webRequest.onSendHeaders.addListener(
+  (details) => {
+    const pending = pendingPostCaptures.get(details.requestId);
+    if (!pending) return;
+    pendingPostCaptures.delete(details.requestId);
+
+    let contentType = 'application/x-www-form-urlencoded';
+    if (details.requestHeaders) {
+      const header = details.requestHeaders.find(
+        (h) => h.name.toLowerCase() === 'content-type'
+      );
+      if (header && header.value) contentType = header.value;
+    }
+
+    const captured = {
+      url: pending.url,
+      body: pending.body,
+      contentType: contentType,
+      reconstructed: pending.reconstructed,
+      timeStamp: pending.timeStamp
+    };
+
+    chrome.storage.local.set({ last_captured_post: captured });
+    chrome.runtime.sendMessage({ type: 'post_captured', data: captured }, () => {
+      // No listener means the side panel isn't open — that's fine, the
+      // capture is already saved in storage for next time it opens.
+      void chrome.runtime.lastError;
+    });
+  },
+  { urls: ['<all_urls>'], types: ['main_frame', 'sub_frame', 'xmlhttprequest'] },
+  ['requestHeaders']
+);
+
+// Clean up if a pending capture's request errors out before headers are sent.
+chrome.webRequest.onErrorOccurred.addListener(
+  (details) => { pendingPostCaptures.delete(details.requestId); },
+  { urls: ['<all_urls>'] }
+);
