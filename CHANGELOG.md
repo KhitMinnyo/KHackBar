@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     POST auto-capture straight into the Intruder (URL, body, content-type), so a
     login you just submitted is fuzzable in one click.
   - Live results showing HTTP status, status text, and response length per request.
+  - **Response-length outlier highlighting** — on completion the Intruder finds
+    the most common response length (the mode) and highlights every response that
+    differs, with a `⭐ differs (±N bytes)` marker and a summary line. This is the
+    Burp trick for username enumeration / login checks: the failures are byte-for-
+    byte identical, so the valid case stands out instantly. **Sort by length /
+    status / original order** buttons re-order the results to surface it fast.
 - **`fuzz_post_request` background handler.** Intruder requests are routed through
   the background service worker (like `execute_post`) so cross-origin targets are
   reached reliably via the extension's `host_permissions`.

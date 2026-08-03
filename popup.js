@@ -588,6 +588,10 @@ document.addEventListener('DOMContentLoaded', function () {
       btnStop: document.getElementById('btn_intruder_stop'),
       btnClear: document.getElementById('btn_intruder_clear'),
       results: document.getElementById('intruder_results'),
+      summary: document.getElementById('intruder_summary'),
+      btnSortLen: document.getElementById('btn_intruder_sort_len'),
+      btnSortStatus: document.getElementById('btn_intruder_sort_status'),
+      btnSortIdx: document.getElementById('btn_intruder_sort_idx'),
       status: status,
       logAudit: logAudit
     });

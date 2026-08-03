@@ -296,8 +296,15 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
   var btnStop      = opts.btnStop;
   var btnClear     = opts.btnClear;
   var results      = opts.results;
+  var summaryEl    = opts.summary;         // outlier summary line
+  var btnSortLen   = opts.btnSortLen;
+  var btnSortStatus = opts.btnSortStatus;
+  var btnSortIdx   = opts.btnSortIdx;
   var status       = opts.status;
   var logAudit     = opts.logAudit || function () {};
+
+  // Per-run result records, used for outlier highlighting and re-sorting.
+  var records = []; // { idx, label, status, length, row, markSpan }
 
   if (!attackTypeEl || !urlEl || !bodyEl || !btnStart || !setsWrap) return;
 
@@ -604,6 +611,8 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
     var signal = abortController.signal;
     setRunning(true);
     clearChildren(results);
+    records = [];
+    if (summaryEl) window.KHackBar.UI.setText(summaryEl, '');
 
     var contentType = ctypeEl && ctypeEl.value ? ctypeEl.value : 'application/x-www-form-urlencoded';
     var modeName = attack === 'sniper' ? 'Sniper' : 'Cluster Bomb';
@@ -628,16 +637,23 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
       lblSpan.style.color = '#ef4444';
       lblSpan.textContent = vec.label;
       var stSpan = document.createElement('span');
+      var markSpan = document.createElement('span'); // outlier marker, filled at finalize
+      markSpan.style.fontWeight = 'bold';
       row.appendChild(idxSpan);
       row.appendChild(lblSpan);
       row.appendChild(stSpan);
+      row.appendChild(markSpan);
       results.appendChild(row);
+
+      var rec = { idx: i + 1, label: vec.label, status: null, length: null, row: row, markSpan: markSpan };
 
       try {
         var resp = await sendReq(parsed.method, finalUrl, contentType, finalBody, finalCookie);
         if (resp && resp.success) {
           stSpan.textContent = ' [' + resp.status + ' ' + resp.statusText + ' | ' + resp.length + ' bytes]';
           stSpan.style.color = (resp.status >= 200 && resp.status < 400) ? '#22c55e' : '#ef4444';
+          rec.status = resp.status;
+          rec.length = resp.length;
         } else if (resp && resp.aborted) {
           stSpan.textContent = ' [Timeout]';
           stSpan.style.color = '#f59e0b';
@@ -650,6 +666,7 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
         stSpan.style.color = '#ef4444';
       }
 
+      records.push(rec);
       results.scrollTop = results.scrollHeight;
       if (!stopped && !signal.aborted) {
         await new Promise(function (r) { return setTimeout(r, window.KHackBar.Config.FUZZ_DELAY); });
@@ -657,10 +674,68 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
     }
 
     setRunning(false);
+    highlightOutliers();
     if (!stopped && !signal.aborted) {
       window.KHackBar.UI.setText(status, '[+] ' + (attack === 'sniper' ? 'Sniper' : 'Cluster Bomb') + ' completed (' + vectors.length + ' requests).');
       logAudit('intruder_completed', probeUrlFor(parsed), 'Completed ' + vectors.length + ' requests');
     }
+  }
+
+  // Find the "odd ones out" by response length: the common length is the mode,
+  // and any response whose length differs is flagged — exactly the signal that
+  // separates a valid username / successful case from the identical failures.
+  function highlightOutliers() {
+    var withLen = records.filter(function (r) { return r.length != null; });
+    // reset any prior highlight
+    records.forEach(function (r) {
+      r.row.style.background = '';
+      r.row.style.borderLeft = '';
+      r.markSpan.textContent = '';
+    });
+    if (withLen.length === 0) {
+      if (summaryEl) window.KHackBar.UI.setText(summaryEl, '');
+      return;
+    }
+
+    // mode of lengths
+    var counts = {};
+    withLen.forEach(function (r) { counts[r.length] = (counts[r.length] || 0) + 1; });
+    var modeLen = null, modeCount = -1;
+    Object.keys(counts).forEach(function (len) {
+      if (counts[len] > modeCount) { modeCount = counts[len]; modeLen = parseInt(len, 10); }
+    });
+
+    var outliers = withLen.filter(function (r) { return r.length !== modeLen; });
+    outliers.forEach(function (r) {
+      r.row.style.background = 'rgba(34,197,94,0.14)';
+      r.row.style.borderLeft = '3px solid #22c55e';
+      r.markSpan.style.color = '#22c55e';
+      r.markSpan.textContent = '  ⭐ differs (' + (r.length - modeLen > 0 ? '+' : '') + (r.length - modeLen) + ' bytes)';
+    });
+
+    if (summaryEl) {
+      var msg;
+      if (outliers.length === 0) {
+        msg = withLen.length + ' responses · all ' + modeLen + ' bytes — no differences found';
+      } else {
+        msg = withLen.length + ' responses · most common ' + modeLen + ' bytes (×' + modeCount + ') · ' + outliers.length + ' outlier(s) highlighted ⭐';
+      }
+      window.KHackBar.UI.setText(summaryEl, msg);
+    }
+  }
+
+  // Re-append existing rows in a new order (keeps highlight/markers intact).
+  function sortResults(key) {
+    if (!records.length) return;
+    var arr = records.slice();
+    if (key === 'len') {
+      arr.sort(function (a, b) { return (b.length == null ? -1 : b.length) - (a.length == null ? -1 : a.length); });
+    } else if (key === 'status') {
+      arr.sort(function (a, b) { return (a.status || 0) - (b.status || 0) || a.idx - b.idx; });
+    } else {
+      arr.sort(function (a, b) { return a.idx - b.idx; });
+    }
+    arr.forEach(function (r) { results.appendChild(r.row); });
   }
 
   function probeUrlFor(parsed) {
@@ -783,7 +858,14 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
   if (btnClear && results) {
     btnClear.onclick = function () {
       clearChildren(results);
+      records = [];
+      if (summaryEl) window.KHackBar.UI.setText(summaryEl, '');
       window.KHackBar.UI.setText(status, '[+] Results cleared.');
     };
   }
+
+  // Sort controls — re-order the finished results to surface the outlier fast.
+  if (btnSortLen) btnSortLen.onclick = function () { sortResults('len'); };
+  if (btnSortStatus) btnSortStatus.onclick = function () { sortResults('status'); };
+  if (btnSortIdx) btnSortIdx.onclick = function () { sortResults('idx'); };
 };

@@ -509,7 +509,13 @@
     </button>
   </div>
 
-  <div style="width:100%; margin-top:6px; font-size:10px; color:#ef4444;">Intruder results:</div>
+  <div style="display:flex; align-items:center; gap:4px; width:100%; margin-top:6px; flex-wrap:wrap;">
+    <span style="font-size:10px; color:#ef4444;">Intruder results:</span>
+    <button id="btn_intruder_sort_len" class="small-btn" style="font-size:9px; flex:0 0 auto;">Sort by length</button>
+    <button id="btn_intruder_sort_status" class="small-btn" style="font-size:9px; flex:0 0 auto;">Sort by status</button>
+    <button id="btn_intruder_sort_idx" class="small-btn" style="font-size:9px; flex:0 0 auto;">Original order</button>
+  </div>
+  <div id="intruder_summary" style="width:100%; font-size:10px; color:#22c55e; margin:2px 0;"></div>
   <div id="intruder_results" style="width:100%; background:#0a0a0a; border:1px solid #3f3f3f; border-radius:4px; padding:6px; max-height:300px; overflow-y:auto; font-size:10px; font-family:inherit; white-space:pre-wrap; word-break:break-all;"></div>
 </div>
 <!-- SETTINGS PANEL -->
