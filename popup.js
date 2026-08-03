@@ -311,9 +311,14 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
 
-    // Restore toggle state + last capture (if any) when the panel opens.
-    chrome.storage.local.get(['capture_post_enabled', 'last_captured_post'], function (result) {
-      chkCapturePost.checked = !!result.capture_post_enabled;
+    // Auto-enable capture whenever the panel opens, so logging in on the active
+    // tab is captured automatically — no need to hunt for a toggle. The user can
+    // still switch it off manually; that choice lasts until the panel is reopened.
+    chrome.storage.local.get(['last_captured_post'], function (result) {
+      chkCapturePost.checked = true;
+      chrome.runtime.sendMessage({ type: 'set_capture_post_enabled', enabled: true }, function () {
+        void chrome.runtime.lastError;
+      });
       if (result.last_captured_post) {
         capturePostStatus.textContent = describeCapture(result.last_captured_post);
       }
@@ -562,6 +567,32 @@ document.addEventListener('DOMContentLoaded', function () {
     logAudit: logAudit
   });
 
+  // ---- Intruder (Sniper / Cluster Bomb) ----
+  if (KHackBar.Fuzzer.initIntruder) {
+    KHackBar.Fuzzer.initIntruder({
+      attackType: document.getElementById('intruder_attack'),
+      method: document.getElementById('intruder_method'),
+      url: document.getElementById('intruder_url'),
+      contentType: document.getElementById('intruder_ctype'),
+      body: document.getElementById('intruder_body'),
+      cookie: document.getElementById('intruder_cookie'),
+      btnLoadCookies: document.getElementById('btn_intruder_loadcookies'),
+      btnLoadCapture: document.getElementById('btn_intruder_loadcapture'),
+      capture: document.getElementById('intruder_capture'),
+      urlencode: document.getElementById('intruder_urlencode'),
+      payloadSetsWrap: document.getElementById('intruder_payload_sets'),
+      btnDetect: document.getElementById('btn_intruder_detect'),
+      btnAddPos: document.getElementById('btn_intruder_addpos'),
+      btnClearPos: document.getElementById('btn_intruder_clearpos'),
+      btnStart: document.getElementById('btn_intruder_start'),
+      btnStop: document.getElementById('btn_intruder_stop'),
+      btnClear: document.getElementById('btn_intruder_clear'),
+      results: document.getElementById('intruder_results'),
+      status: status,
+      logAudit: logAudit
+    });
+  }
+
   // ============================================================
   // 9. Settings module initialization
   // ============================================================
@@ -602,7 +633,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ============================================================
   var headerTitle = document.querySelector('.header h3');
   if (headerTitle) {
-    headerTitle.textContent = 'KHackBar v1.8 Pro';
+    headerTitle.textContent = 'KHackBar v1.9 Pro';
   }
 
   // Initial status

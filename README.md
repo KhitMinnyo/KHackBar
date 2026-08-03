@@ -1,6 +1,8 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v1.8 Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v1.9 Pro**
+
+> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v1.9** (Intruder: Sniper & Cluster Bomb)
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -46,6 +48,21 @@ Built-in encoding/decoding tools for quick payload transformation:
 - **HTML Entity** encode/decode
 - **Unicode** escape/unescape
 - **URL** encode/decode
+
+---
+
+## 🆕 What's New in v1.9
+
+### 🎯 Intruder — Sniper & Cluster Bomb
+A new **Intruder** section under the FUZZER tab brings Burp-style multi-position attacks to POST (and GET) requests:
+- Wrap each injection point with the Burp syntax **`§value§`** (e.g. `user=§admin§&pass=§password§`), then click **Detect positions**
+- **Sniper** — one payload set; each position is fuzzed one at a time while the others keep their base value (`requests = positions × payloads`)
+- **Cluster Bomb** — one payload set per position; every combination is tried (`requests = set₁ × set₂ × …`)
+- Works with `POST` and `GET`, selectable `Content-Type` (form-urlencoded / JSON / multipart), and an optional **URL-encode payloads** toggle
+- Injects into the **URL, POST body, and Cookie header** — mark any of them with `§§`; a **Load tab cookies** button prefills the current cookies so you can fuzz a value. Cookie injection uses a temporary `declarativeNetRequest` header rule (since `fetch()` can't set `Cookie`), so your real cookie jar is never touched
+- **Add § position** wraps the current selection in `§§` (Burp's "Add §"); each payload set has a one-click **wordlist** loader
+- Requests are routed through the background service worker for reliable cross-origin delivery, with per-request delay, a **Stop** button (AbortController), and live status/length results
+- Stays inside the existing **scope guard** (authorized targets only) and enforces a 5,000-request safety cap to prevent runaway combinatorial blasts
 
 ---
 

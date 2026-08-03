@@ -153,9 +153,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'set_capture_post_enabled') {
-    capturePostEnabled = !!message.enabled;
-    chrome.storage.local.set({ capture_post_enabled: capturePostEnabled });
-    sendResponse({ success: true, enabled: capturePostEnabled });
+    const enabled = !!message.enabled;
+    // Source of truth is storage — the webRequest listeners read it freshly
+    // rather than relying on a module variable that resets when the MV3
+    // service worker sleeps.
+    chrome.storage.local.set({ capture_post_enabled: enabled });
+    sendResponse({ success: true, enabled: enabled });
+    return false;
+  }
+
+  // ---- POST captured by the in-page content script ----
+  // Reliable even when the service worker was asleep: this very message wakes
+  // it. Gate on the stored enabled flag, save, and relay to the panel.
+  if (message.type === 'captured_post_from_page') {
+    const d = message.data || {};
+    console.debug('[KHackBar] captured_post_from_page received:', d.url);
+    if (!d.url || !d.body) return false;
+    const captured = {
+      url: d.url,
+      body: d.body,
+      contentType: d.contentType || 'application/x-www-form-urlencoded',
+      reconstructed: false,
+      timeStamp: d.timeStamp || Date.now()
+    };
+    // Always store the latest capture so "Load captured POST" works regardless
+    // of the toggle state. The toggle only gates the live auto-fill push below.
+    chrome.storage.local.set({ last_captured_post: captured });
+    chrome.storage.local.get(['capture_post_enabled'], (res) => {
+      if (res && res.capture_post_enabled) {
+        chrome.runtime.sendMessage({ type: 'post_captured', data: captured }, () => {
+          void chrome.runtime.lastError;
+        });
+      }
+    });
     return false;
   }
 
@@ -212,7 +242,90 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     return true; // keep channel open for async sendResponse
   }
+
+  // ---- Intruder POST/GET fuzz requests (Sniper / Cluster Bomb) ----
+  // Like fuzz_request, but lets the Intruder engine choose the HTTP method
+  // and (for POST) send a body + Content-Type. Routed through the background
+  // worker so the extension's host_permissions handle cross-origin reliably.
+  //
+  // Cookie injection: fetch() cannot set the forbidden `Cookie` header, so
+  // when message.cookie is provided we install a temporary declarativeNetRequest
+  // rule that sets the Cookie header for exactly this request URL, fetch, then
+  // remove the rule. This gives the target the injected cookie verbatim without
+  // touching the user's real cookie jar.
+  if (message.type === 'fuzz_post_request') {
+    runIntruderRequest(message).then(sendResponse);
+    return true; // keep channel open for async sendResponse
+  }
 });
+
+// Reserved DNR rule id for the Intruder's per-request Cookie injection.
+const FUZZ_COOKIE_RULE_ID = 900001;
+
+async function runIntruderRequest(message) {
+  const method = (message.method || 'POST').toUpperCase();
+  const timeoutMs = message.timeout || 30000;
+  const hasCookie = message.cookie != null && message.cookie !== '';
+  let ruleInstalled = false;
+
+  try {
+    if (hasCookie) {
+      // updateDynamicRules resolves only once the rule is actually applied,
+      // so the immediately following fetch is guaranteed to carry the header.
+      await chrome.declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: [FUZZ_COOKIE_RULE_ID],
+        addRules: [{
+          id: FUZZ_COOKIE_RULE_ID,
+          priority: 100,
+          action: {
+            type: 'modifyHeaders',
+            requestHeaders: [{ header: 'cookie', operation: 'set', value: message.cookie }]
+          },
+          condition: {
+            urlFilter: message.url,
+            resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest', 'other', 'script', 'stylesheet']
+          }
+        }]
+      });
+      ruleInstalled = true;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const init = { method: method, signal: controller.signal };
+    if (method !== 'GET' && method !== 'HEAD') {
+      init.headers = { 'Content-Type': message.contentType || 'application/x-www-form-urlencoded' };
+      init.body = message.data != null ? message.data : '';
+    }
+
+    try {
+      const response = await fetch(message.url, init);
+      clearTimeout(timeoutId);
+      const responseText = await response.text();
+      return {
+        success: true,
+        status: response.status,
+        statusText: response.statusText,
+        length: responseText.length
+      };
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        return { success: false, aborted: true, error: 'Timed out after ' + timeoutMs + 'ms' };
+      }
+      return { success: false, error: err.message };
+    }
+  } finally {
+    if (ruleInstalled) {
+      try {
+        await chrome.declarativeNetRequest.updateDynamicRules({
+          removeRuleIds: [FUZZ_COOKIE_RULE_ID],
+          addRules: []
+        });
+      } catch (e) { /* best-effort cleanup */ }
+    }
+  }
+}
 
 /**
  * Remove all previously installed custom header rules.
@@ -270,29 +383,23 @@ async function applyHeaderRules(urlPattern, headers) {
 }
 
 // ---------- POST Capture (Burp-style auto-fill) ----------
-// When enabled via the toggle in the POST section, watches POST requests
-// made by the currently active tab (form submissions, fetch/XHR calls) and
-// pushes the URL + body + content-type to the side panel so it can
-// auto-fill the POST fields — e.g. log into a site normally in the browser
-// and the exact request shows up in KHackBar without manual copy/paste.
+// Observes POST requests from the active tab (form submissions, fetch/XHR)
+// and pushes URL + body + content-type to the side panel so it can auto-fill
+// the POST / Intruder fields — log in normally and the exact request appears
+// in KHackBar without manual copy/paste. Non-blocking observation only; the
+// real request is never modified or delayed.
 //
-// This only OBSERVES traffic via the non-blocking webRequest API (MV3
-// still fully supports this — only the *blocking* variant is restricted),
-// it never modifies or delays the real request.
-let capturePostEnabled = false;
-let activeTabId = null;
-const pendingPostCaptures = new Map(); // requestId -> { url, body, reconstructed, timeStamp }
-
-chrome.storage.local.get(['capture_post_enabled'], (result) => {
-  capturePostEnabled = !!result.capture_post_enabled;
-});
-
-chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
-  if (tabs && tabs[0]) activeTabId = tabs[0].id;
-});
-chrome.tabs.onActivated.addListener((info) => {
-  activeTabId = info.tabId;
-});
+// MV3 correctness note: the service worker sleeps and is WOKEN by the request
+// event itself, so any module-level state (an "enabled" flag, the active tab
+// id) is NOT reliably initialised at the instant onBeforeRequest fires — the
+// async storage.get / tabs.query that would populate it hasn't run yet. The
+// old version guarded onBeforeRequest on those uninitialised variables, so it
+// silently dropped the first login after every sleep (i.e. nearly always).
+//
+// Fix: capture every POST body unconditionally here (cheap, just a Map insert),
+// then defer the "is capture enabled? is this the active tab?" decision to
+// onSendHeaders, where we read both freshly from storage / tabs.query.
+const pendingPostCaptures = new Map(); // requestId -> { url, body, reconstructed, tabId, timeStamp }
 
 /**
  * Reconstruct a readable body string from webRequest's requestBody details.
@@ -337,19 +444,21 @@ function cleanupStalePostCaptures() {
 
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
-    if (!capturePostEnabled) return;
+    // Capture unconditionally — the enabled/active-tab decision happens later
+    // in onSendHeaders, where the required state can be read reliably even on
+    // a freshly-woken service worker.
     if (details.method !== 'POST') return;
-    if (details.tabId !== activeTabId) return;
-
-    cleanupStalePostCaptures();
 
     const decoded = decodePostBody(details.requestBody);
     if (!decoded) return;
+
+    cleanupStalePostCaptures();
 
     pendingPostCaptures.set(details.requestId, {
       url: details.url,
       body: decoded.body,
       reconstructed: decoded.reconstructed,
+      tabId: details.tabId,
       timeStamp: details.timeStamp || Date.now()
     });
   },
@@ -371,19 +480,35 @@ chrome.webRequest.onSendHeaders.addListener(
       if (header && header.value) contentType = header.value;
     }
 
-    const captured = {
-      url: pending.url,
-      body: pending.body,
-      contentType: contentType,
-      reconstructed: pending.reconstructed,
-      timeStamp: pending.timeStamp
-    };
+    // Decide whether to keep this capture using freshly-read state. This is a
+    // non-blocking observer, so doing async work here is fine — the request is
+    // already on its way.
+    chrome.storage.local.get(['capture_post_enabled'], (res) => {
+      if (!res || !res.capture_post_enabled) return;
 
-    chrome.storage.local.set({ last_captured_post: captured });
-    chrome.runtime.sendMessage({ type: 'post_captured', data: captured }, () => {
-      // No listener means the side panel isn't open — that's fine, the
-      // capture is already saved in storage for next time it opens.
-      void chrome.runtime.lastError;
+      // -1 tabId means the request isn't tied to a tab (e.g. a background
+      // fetch) — skip those. Otherwise only keep the tab the user is looking at.
+      if (pending.tabId < 0) return;
+
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+        const activeId = tabs && tabs[0] ? tabs[0].id : null;
+        if (activeId !== null && pending.tabId !== activeId) return;
+
+        const captured = {
+          url: pending.url,
+          body: pending.body,
+          contentType: contentType,
+          reconstructed: pending.reconstructed,
+          timeStamp: pending.timeStamp
+        };
+
+        chrome.storage.local.set({ last_captured_post: captured });
+        chrome.runtime.sendMessage({ type: 'post_captured', data: captured }, () => {
+          // No listener means the side panel isn't open — that's fine, the
+          // capture is already saved in storage for next time it opens.
+          void chrome.runtime.lastError;
+        });
+      });
     });
   },
   { urls: ['<all_urls>'], types: ['main_frame', 'sub_frame', 'xmlhttprequest'] },

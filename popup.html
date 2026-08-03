@@ -249,7 +249,7 @@
     <circle cx="12" cy="12" r="3"/>
     <circle cx="12" cy="12" r="1" fill="#dc2626"/>
   </svg>
-  <h3>KHackBar v1.8 Pro</h3>
+  <h3>KHackBar v1.9 Pro</h3>
 </div>
 <div class="menu-bar">
   <div class="menu-item" id="menu_sql">BASIC</div>
@@ -433,6 +433,84 @@
   </div>
   <div style="width:100%; margin-top:6px; font-size:10px; color:#ef4444;">Results:</div>
   <div id="fuzzer_results" style="width:100%; background:#0a0a0a; border:1px solid #3f3f3f; border-radius:4px; padding:6px; max-height:300px; overflow-y:auto; font-size:10px; font-family:inherit; white-space:pre-wrap; word-break:break-all;"></div>
+
+  <!-- ============ INTRUDER (Sniper / Cluster Bomb) ============ -->
+  <div style="width:100%; border-top:1px dashed #3f3f3f; margin:14px 0 8px;"></div>
+  <div style="width:100%; margin-bottom:6px; font-size:12px; color:#ef4444; font-weight:bold;">🎯 Intruder — Sniper &amp; Cluster Bomb</div>
+  <div style="width:100%; margin-bottom:6px; font-size:10px; color:#a3a3a3;">Wrap each injection point with <b style="color:#ef4444;">§value§</b> (e.g. <code>user=§admin§&amp;pass=§x§</code>), then Detect positions.</div>
+
+  <div style="display:flex; gap:4px; width:100%; margin-bottom:6px;">
+    <select id="intruder_attack" class="content-type-select" style="flex:1;">
+      <option value="sniper">Sniper (1 payload set)</option>
+      <option value="cluster">Cluster Bomb (set per position)</option>
+    </select>
+    <select id="intruder_method" class="content-type-select" style="flex:0 0 90px;">
+      <option value="POST">POST</option>
+      <option value="GET">GET</option>
+    </select>
+  </div>
+
+  <input type="text" id="intruder_url" placeholder="https://example.com/login   (may also contain §§)" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:12px; outline:none; font-family:inherit; margin-bottom:6px;">
+
+  <select id="intruder_ctype" class="content-type-select" style="width:100%; margin-bottom:6px;">
+    <option value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</option>
+    <option value="application/json">application/json</option>
+    <option value="multipart/form-data">multipart/form-data</option>
+  </select>
+
+  <div style="display:flex; align-items:center; gap:6px; width:100%; margin-bottom:4px; flex-wrap:wrap;">
+    <span style="font-size:10px; color:#ef4444;">Request body (POST) — mark positions with §§:</span>
+    <label style="display:flex; align-items:center; gap:3px; font-size:9px; color:#ef4444; cursor:pointer; user-select:none; margin-left:auto;">
+      <input type="checkbox" id="intruder_capture" style="cursor:pointer;">
+      🔴 Auto-capture
+    </label>
+    <button id="btn_intruder_loadcapture" class="small-btn" style="font-size:9px; flex:0 0 auto;">⬇ Load captured POST</button>
+  </div>
+  <textarea id="intruder_body" placeholder="user=§admin§&#38;pass=§password§" style="width:100%; height:70px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:11px; outline:none; font-family:inherit; resize:vertical; margin-bottom:6px;"></textarea>
+
+  <div style="display:flex; align-items:center; gap:6px; width:100%; margin-bottom:4px;">
+    <span style="font-size:10px; color:#ef4444;">Cookie header (optional) — mark positions with §§:</span>
+    <button id="btn_intruder_loadcookies" class="small-btn" style="font-size:9px; margin-left:auto; flex:0 0 auto;">Load tab cookies</button>
+  </div>
+  <textarea id="intruder_cookie" placeholder="session=§abc123§; role=admin" style="width:100%; height:48px; background:#0a0a0a; color:#22c55e; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:11px; outline:none; font-family:inherit; resize:vertical; margin-bottom:6px;"></textarea>
+
+  <div style="display:flex; align-items:center; gap:6px; width:100%; margin-bottom:6px; flex-wrap:wrap;">
+    <button id="btn_intruder_addpos" class="action-btn" style="font-size:11px; flex:0 0 auto;">Add § position</button>
+    <button id="btn_intruder_clearpos" class="small-btn" style="font-size:9px; flex:0 0 auto;">Clear §</button>
+    <button id="btn_intruder_detect" class="action-btn" style="font-size:11px; flex:0 0 auto;">Detect positions</button>
+    <label style="display:flex; align-items:center; gap:4px; font-size:10px; color:#ef4444; cursor:pointer; user-select:none;">
+      <input type="checkbox" id="intruder_urlencode" checked style="cursor:pointer;">
+      URL-encode payloads
+    </label>
+  </div>
+  <div style="width:100%; margin-bottom:6px; font-size:9px; color:#a3a3a3;">Tip: select text in the URL or body and click <b style="color:#ef4444;">Add § position</b> to mark it (or just type <b style="color:#ef4444;">§§</b> manually).</div>
+
+  <div id="intruder_payload_sets" style="width:100%;"></div>
+
+  <div style="display:flex; gap:4px; width:100%; margin-top:6px;">
+    <button id="btn_intruder_start" class="action-btn" style="font-size:11px;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="5 3 19 12 5 21 5 3"/>
+      </svg>
+      Start Attack
+    </button>
+    <button id="btn_intruder_stop" class="action-btn" style="font-size:11px; opacity:0.5; cursor:not-allowed;" disabled>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="6" y="6" width="12" height="12" rx="2"/>
+      </svg>
+      Stop
+    </button>
+    <button id="btn_intruder_clear" class="action-btn" style="font-size:11px;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+      </svg>
+      Clear
+    </button>
+  </div>
+
+  <div style="width:100%; margin-top:6px; font-size:10px; color:#ef4444;">Intruder results:</div>
+  <div id="intruder_results" style="width:100%; background:#0a0a0a; border:1px solid #3f3f3f; border-radius:4px; padding:6px; max-height:300px; overflow-y:auto; font-size:10px; font-family:inherit; white-space:pre-wrap; word-break:break-all;"></div>
 </div>
 <!-- SETTINGS PANEL -->
 <div id="settings_panel" class="panel" style="display:none; flex-direction:column;">
