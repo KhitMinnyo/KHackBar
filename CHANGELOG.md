@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.9] — 2026-08-03
+## [2.0] — 2026-08-03
+
+A major release: a full Burp-style **Intruder** (Sniper & Cluster Bomb) with
+concurrency, cookie injection, response-length outlier detection, CSRF PoC
+generation, reliable POST auto-capture, and a larger, more readable UI.
+
 
 ### Added
 - **Intruder — Sniper & Cluster Bomb.** A new Intruder section under the FUZZER tab
@@ -35,6 +40,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     POST auto-capture straight into the Intruder (URL, body, content-type), so a
     login you just submitted is fuzzable in one click.
   - Live results showing HTTP status, status text, and response length per request.
+  - **Concurrent execution (speed).** A configurable **Threads** control (1–50,
+    default 10) runs many requests in parallel via a worker pool — closing the
+    speed gap with Burp instead of the old one-at-a-time-with-300ms-pause loop.
+    An optional **Delay (ms)** throttles per request when needed, and the status
+    line shows live throughput (req/s) and total time. Rows are pre-created in
+    request order so display order stays stable regardless of which worker
+    finishes first. Cookie-injection runs fall back to sequential (1 thread)
+    because the per-request Cookie header rule can't be shared safely.
+  - **Generate CSRF PoC** (Burp-style) — one click turns the Intruder's URL + body
+    + method + content-type into a self-submitting HTML page. Form-urlencoded and
+    multipart requests become an auto-submitting `<form>` (values are decoded so
+    the browser re-encodes them identically); JSON/raw bodies become a credentialed
+    `fetch()` PoC with a CORS caveat noted inline. Copy, download `.html`, or open
+    it in a new tab.
+  - **Larger, readable Intruder fields** — all FUZZER-panel text, dropdowns, buttons,
+    labels and helper text are now 15px, with the Request body at 16px, plus the POST
+    section's content-type dropdown and buttons at 15px — comfortable on large /
+    high-DPI screens.
   - **Response-length outlier highlighting** — on completion the Intruder finds
     the most common response length (the mode) and highlights every response that
     differs, with a `⭐ differs (±N bytes)` marker and a summary line. This is the
@@ -109,6 +132,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   execution, encoders/decoders, scope enforcement, and audit logging — all in a
   side-panel, Red Team-themed UI on Manifest V3.
 
-[1.9]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v1.9
+[2.0]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.0
 [1.8]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v1.8
 [1.3]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v1.3

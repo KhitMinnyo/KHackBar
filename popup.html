@@ -26,6 +26,10 @@
     .header svg {
       flex-shrink: 0;
     }
+    .header h3 {
+      font-size: 18px;
+      margin: 0;
+    }
     .menu-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
     .menu-item {
       background: #1a1a1a;
@@ -33,7 +37,7 @@
       border: 1px solid #3f3f3f;
       padding: 4px 6px;
       cursor: pointer;
-      font-size: 11px;
+      font-size: 15px;
       border-radius: 4px;
       flex-grow: 1;
       text-align: center;
@@ -160,7 +164,7 @@
       border: 1px solid #3f3f3f;
       padding: 4px 8px;
       cursor: pointer;
-      font-size: 10px;
+      font-size: 15px;
       border-radius: 4px;
       margin: 2px;
       font-family: inherit;
@@ -240,6 +244,29 @@
       background: #dc2626;
       color: #0a0a0a;
     }
+
+    /* ---- Readability: enlarge Intruder/Fuzzer text, dropdowns & buttons ---- */
+    /* Scoped to the FUZZER panel so the rest of the UI is untouched. !important
+       is required because most fields carry inline font-size styles. */
+    #fuzzer_panel,
+    #fuzzer_panel *,
+    #fuzzer_panel select,
+    #fuzzer_panel button,
+    #fuzzer_panel label,
+    #fuzzer_panel span,
+    #fuzzer_panel input,
+    #fuzzer_panel textarea {
+      font-size: 15px !important;
+    }
+    /* Request body a touch larger still */
+    #fuzzer_panel textarea#intruder_body {
+      font-size: 16px !important;
+    }
+    /* POST section dropdown + buttons the user selects from */
+    .post-options .content-type-select,
+    .post-options button {
+      font-size: 15px !important;
+    }
   </style>
 </head>
 <body>
@@ -249,7 +276,7 @@
     <circle cx="12" cy="12" r="3"/>
     <circle cx="12" cy="12" r="1" fill="#dc2626"/>
   </svg>
-  <h3>KHackBar v1.9 Pro</h3>
+  <h3>KHackBar v2.0 Pro</h3>
 </div>
 <div class="menu-bar">
   <div class="menu-item" id="menu_sql">BASIC</div>
@@ -450,7 +477,7 @@
     </select>
   </div>
 
-  <input type="text" id="intruder_url" placeholder="https://example.com/login   (may also contain §§)" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:12px; outline:none; font-family:inherit; margin-bottom:6px;">
+  <input type="text" id="intruder_url" placeholder="https://example.com/login   (may also contain §§)" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:7px; border-radius:4px; font-size:14px; outline:none; font-family:inherit; margin-bottom:6px;">
 
   <select id="intruder_ctype" class="content-type-select" style="width:100%; margin-bottom:6px;">
     <option value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</option>
@@ -466,13 +493,27 @@
     </label>
     <button id="btn_intruder_loadcapture" class="small-btn" style="font-size:9px; flex:0 0 auto;">⬇ Load captured POST</button>
   </div>
-  <textarea id="intruder_body" placeholder="user=§admin§&#38;pass=§password§" style="width:100%; height:70px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:11px; outline:none; font-family:inherit; resize:vertical; margin-bottom:6px;"></textarea>
+  <textarea id="intruder_body" placeholder="user=§admin§&#38;pass=§password§" style="width:100%; height:96px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:8px; border-radius:4px; font-size:15px; line-height:1.5; outline:none; font-family:inherit; resize:vertical; margin-bottom:6px;"></textarea>
 
   <div style="display:flex; align-items:center; gap:6px; width:100%; margin-bottom:4px;">
     <span style="font-size:10px; color:#ef4444;">Cookie header (optional) — mark positions with §§:</span>
     <button id="btn_intruder_loadcookies" class="small-btn" style="font-size:9px; margin-left:auto; flex:0 0 auto;">Load tab cookies</button>
   </div>
-  <textarea id="intruder_cookie" placeholder="session=§abc123§; role=admin" style="width:100%; height:48px; background:#0a0a0a; color:#22c55e; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:11px; outline:none; font-family:inherit; resize:vertical; margin-bottom:6px;"></textarea>
+  <textarea id="intruder_cookie" placeholder="session=§abc123§; role=admin" style="width:100%; height:56px; background:#0a0a0a; color:#22c55e; border:1px solid #3f3f3f; padding:7px; border-radius:4px; font-size:14px; line-height:1.5; outline:none; font-family:inherit; resize:vertical; margin-bottom:6px;"></textarea>
+
+  <!-- Generate CSRF PoC (Burp-style) -->
+  <div style="display:flex; align-items:center; gap:6px; width:100%; margin-bottom:6px; flex-wrap:wrap;">
+    <button id="btn_intruder_csrf" class="action-btn" style="font-size:11px; flex:0 0 auto;">📝 Generate CSRF PoC</button>
+    <span style="font-size:9px; color:#a3a3a3;">builds a self-submitting HTML page from the URL + body above (§§ ignored)</span>
+  </div>
+  <div id="intruder_csrf_wrap" style="width:100%; display:none; margin-bottom:6px;">
+    <textarea id="intruder_csrf_output" readonly spellcheck="false" style="width:100%; height:150px; background:#0a0a0a; color:#22c55e; border:1px solid #3f3f3f; padding:7px; border-radius:4px; font-size:12px; line-height:1.45; outline:none; font-family:inherit; resize:vertical; white-space:pre; overflow:auto;"></textarea>
+    <div style="display:flex; gap:4px; width:100%; margin-top:4px;">
+      <button id="btn_intruder_csrf_copy" class="small-btn" style="font-size:9px;">Copy</button>
+      <button id="btn_intruder_csrf_download" class="small-btn" style="font-size:9px;">Download .html</button>
+      <button id="btn_intruder_csrf_open" class="small-btn" style="font-size:9px;">Open in new tab</button>
+    </div>
+  </div>
 
   <div style="display:flex; align-items:center; gap:6px; width:100%; margin-bottom:6px; flex-wrap:wrap;">
     <button id="btn_intruder_addpos" class="action-btn" style="font-size:11px; flex:0 0 auto;">Add § position</button>
@@ -484,6 +525,17 @@
     </label>
   </div>
   <div style="width:100%; margin-bottom:6px; font-size:9px; color:#a3a3a3;">Tip: select text in the URL or body and click <b style="color:#ef4444;">Add § position</b> to mark it (or just type <b style="color:#ef4444;">§§</b> manually).</div>
+
+  <div style="display:flex; align-items:center; gap:12px; width:100%; margin-bottom:6px; flex-wrap:wrap;">
+    <label style="display:flex; align-items:center; gap:4px; font-size:10px; color:#ef4444;">
+      Threads
+      <input type="number" id="intruder_threads" value="10" min="1" max="50" title="Parallel requests in flight (like Burp's resource pool)" style="width:52px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:3px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+    </label>
+    <label style="display:flex; align-items:center; gap:4px; font-size:10px; color:#ef4444;">
+      Delay (ms)
+      <input type="number" id="intruder_delay" value="0" min="0" max="60000" title="Optional pause after each request per thread (0 = fastest)" style="width:64px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:3px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+    </label>
+  </div>
 
   <div id="intruder_payload_sets" style="width:100%;"></div>
 
@@ -516,7 +568,7 @@
     <button id="btn_intruder_sort_idx" class="small-btn" style="font-size:9px; flex:0 0 auto;">Original order</button>
   </div>
   <div id="intruder_summary" style="width:100%; font-size:10px; color:#22c55e; margin:2px 0;"></div>
-  <div id="intruder_results" style="width:100%; background:#0a0a0a; border:1px solid #3f3f3f; border-radius:4px; padding:6px; max-height:300px; overflow-y:auto; font-size:10px; font-family:inherit; white-space:pre-wrap; word-break:break-all;"></div>
+  <div id="intruder_results" style="width:100%; background:#0a0a0a; border:1px solid #3f3f3f; border-radius:4px; padding:6px; max-height:340px; overflow-y:auto; font-size:12.5px; line-height:1.5; font-family:inherit; white-space:pre-wrap; word-break:break-all;"></div>
 </div>
 <!-- SETTINGS PANEL -->
 <div id="settings_panel" class="panel" style="display:none; flex-direction:column;">

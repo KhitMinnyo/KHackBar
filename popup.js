@@ -580,6 +580,14 @@ document.addEventListener('DOMContentLoaded', function () {
       btnLoadCapture: document.getElementById('btn_intruder_loadcapture'),
       capture: document.getElementById('intruder_capture'),
       urlencode: document.getElementById('intruder_urlencode'),
+      threads: document.getElementById('intruder_threads'),
+      delay: document.getElementById('intruder_delay'),
+      btnCsrf: document.getElementById('btn_intruder_csrf'),
+      csrfWrap: document.getElementById('intruder_csrf_wrap'),
+      csrfOutput: document.getElementById('intruder_csrf_output'),
+      btnCsrfCopy: document.getElementById('btn_intruder_csrf_copy'),
+      btnCsrfDownload: document.getElementById('btn_intruder_csrf_download'),
+      btnCsrfOpen: document.getElementById('btn_intruder_csrf_open'),
       payloadSetsWrap: document.getElementById('intruder_payload_sets'),
       btnDetect: document.getElementById('btn_intruder_detect'),
       btnAddPos: document.getElementById('btn_intruder_addpos'),
@@ -637,7 +645,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ============================================================
   var headerTitle = document.querySelector('.header h3');
   if (headerTitle) {
-    headerTitle.textContent = 'KHackBar v1.9 Pro';
+    headerTitle.textContent = 'KHackBar v2.0 Pro';
   }
 
   // Initial status

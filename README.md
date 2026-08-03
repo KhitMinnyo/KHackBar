@@ -1,8 +1,8 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v1.9 Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.0 Pro**
 
-> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v1.9** (Intruder: Sniper & Cluster Bomb)
+> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.0** (Burp-style Intruder: Sniper & Cluster Bomb, concurrency, CSRF PoC)
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -51,7 +51,7 @@ Built-in encoding/decoding tools for quick payload transformation:
 
 ---
 
-## 🆕 What's New in v1.9
+## 🆕 What's New in v2.0
 
 ### 🎯 Intruder — Sniper & Cluster Bomb
 A new **Intruder** section under the FUZZER tab brings Burp-style multi-position attacks to POST (and GET) requests:
@@ -61,8 +61,23 @@ A new **Intruder** section under the FUZZER tab brings Burp-style multi-position
 - Works with `POST` and `GET`, selectable `Content-Type` (form-urlencoded / JSON / multipart), and an optional **URL-encode payloads** toggle
 - Injects into the **URL, POST body, and Cookie header** — mark any of them with `§§`; a **Load tab cookies** button prefills the current cookies so you can fuzz a value. Cookie injection uses a temporary `declarativeNetRequest` header rule (since `fetch()` can't set `Cookie`), so your real cookie jar is never touched
 - **Add § position** wraps the current selection in `§§` (Burp's "Add §"); each payload set has a one-click **wordlist** loader
-- Requests are routed through the background service worker for reliable cross-origin delivery, with per-request delay, a **Stop** button (AbortController), and live status/length results
+- Requests are routed through the background service worker for reliable cross-origin delivery, with a **Stop** button (AbortController) and live status/length results
 - Stays inside the existing **scope guard** (authorized targets only) and enforces a 5,000-request safety cap to prevent runaway combinatorial blasts
+
+### ⚡ Concurrent execution (speed)
+A configurable **Threads** control (1–50, default 10) runs many requests in parallel via a worker pool — closing the speed gap with Burp instead of firing one request at a time. An optional **Delay (ms)** throttles per request for rate-limited targets, and the status line shows live throughput (req/s) and total time. Cookie-injection runs fall back to sequential for correctness.
+
+### 🔦 Response-length outlier highlighting
+On completion the Intruder finds the most common response length and highlights every response that differs with a `⭐ differs (±N bytes)` marker plus a summary line — the classic signal for username enumeration / login checks, where failures are byte-for-byte identical and the valid case stands out instantly. **Sort by length / status / original order** buttons surface it fast.
+
+### 📝 Generate CSRF PoC
+One click turns the Intruder's URL + body + method + content-type into a self-submitting HTML page (Burp-style). Form-urlencoded / multipart requests become an auto-submitting `<form>`; JSON/raw bodies become a credentialed `fetch()` PoC. **Copy**, **Download .html**, or **Open in new tab**.
+
+### 🎣 Reliable POST auto-capture → Intruder
+POST auto-capture is now done by **in-page content scripts** (native `<form>` submissions, `fetch`/`XHR`, and programmatic `form.submit()` for ASP.NET `__doPostBack`), so it no longer misses logins when the MV3 service worker is asleep. Capture auto-enables while the panel is open, and a **⬇ Load captured POST** button drops the captured request straight into the Intruder.
+
+### 🔠 Larger, readable UI
+All FUZZER-panel text, dropdowns, buttons and helper text are now 15px (Request body 16px), plus the POST section's content-type dropdown and buttons — comfortable on large / high-DPI screens.
 
 ---
 

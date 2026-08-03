@@ -288,6 +288,14 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
   var btnLoadCapture = opts.btnLoadCapture; // pull last auto-captured POST
   var captureEl    = opts.capture;         // in-Intruder Auto-capture toggle
   var urlencodeEl  = opts.urlencode;       // checkbox: URL-encode payloads
+  var threadsEl    = opts.threads;         // concurrency (parallel requests)
+  var delayEl      = opts.delay;           // optional per-request delay (ms)
+  var btnCsrf      = opts.btnCsrf;         // Generate CSRF PoC
+  var csrfWrap     = opts.csrfWrap;        // output container
+  var csrfOutput   = opts.csrfOutput;      // output textarea
+  var btnCsrfCopy  = opts.btnCsrfCopy;
+  var btnCsrfDownload = opts.btnCsrfDownload;
+  var btnCsrfOpen  = opts.btnCsrfOpen;
   var setsWrap     = opts.payloadSetsWrap; // container div for payload textareas
   var btnDetect    = opts.btnDetect;
   var btnAddPos    = opts.btnAddPos;       // "Add §" — wrap selection in §§
@@ -448,7 +456,7 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
     }
 
     var attack = attackTypeEl.value;
-    var boxStyle = 'width:100%; height:70px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:11px; outline:none; font-family:inherit; resize:vertical; margin-bottom:6px;';
+    var boxStyle = 'width:100%; height:84px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:7px; border-radius:4px; font-size:14px; line-height:1.5; outline:none; font-family:inherit; resize:vertical; margin-bottom:6px;';
     var lblStyle = 'width:100%; margin:4px 0; font-size:10px; color:#ef4444;';
 
     if (attack === 'sniper') {
@@ -616,18 +624,26 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
 
     var contentType = ctypeEl && ctypeEl.value ? ctypeEl.value : 'application/x-www-form-urlencoded';
     var modeName = attack === 'sniper' ? 'Sniper' : 'Cluster Bomb';
-    window.KHackBar.UI.setText(status, '[+] ' + modeName + ' started — ' + vectors.length + ' request(s)...');
-    logAudit('intruder_start', probeUrlFor(parsed), modeName + ': ' + vectors.length + ' requests');
 
+    // ---- Speed controls: concurrent workers + optional per-request delay ----
+    // This is what closes the gap with Burp: instead of one-at-a-time with a
+    // fixed 300ms pause, run up to N requests in flight at once.
+    var hasCookie = !!(parsed.cookieTemplate && parsed.cookieTemplate.trim());
+    var concurrency = clampInt(threadsEl && threadsEl.value, 10, 1, 50);
+    // Cookie injection uses a single shared declarativeNetRequest rule per
+    // request, which concurrent requests would clobber — so force sequential
+    // when a Cookie position is in play (correctness over speed).
+    if (hasCookie) concurrency = 1;
+    var delay = clampInt(delayEl && delayEl.value, 0, 0, 60000);
+
+    window.KHackBar.UI.setText(status, '[+] ' + modeName + ' started — ' + vectors.length +
+      ' request(s), ' + concurrency + ' thread(s)' + (hasCookie ? ' (cookie mode → sequential)' : '') +
+      (delay ? ', ' + delay + 'ms delay' : '') + '...');
+    logAudit('intruder_start', probeUrlFor(parsed), modeName + ': ' + vectors.length + ' requests, conc=' + concurrency);
+
+    // Pre-create rows + records in request order so display order is stable no
+    // matter which worker finishes first; workers fill them in place.
     for (var i = 0; i < vectors.length; i++) {
-      if (stopped || signal.aborted) break;
-      var vec = vectors[i];
-      var finalUrl = fillTemplate(parsed.urlTemplate, vec.rendered);
-      var finalBody = (parsed.method === 'GET' || parsed.method === 'HEAD')
-        ? '' : fillTemplate(parsed.bodyTemplate, vec.rendered);
-      var finalCookie = (parsed.cookieTemplate && parsed.cookieTemplate.trim())
-        ? fillTemplate(parsed.cookieTemplate, vec.rendered) : '';
-
       var row = document.createElement('div');
       row.style.cssText = 'padding:3px; border-bottom:1px solid #3f3f3f;';
       var idxSpan = document.createElement('span');
@@ -635,50 +651,91 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
       idxSpan.textContent = '#' + (i + 1) + ' ';
       var lblSpan = document.createElement('span');
       lblSpan.style.color = '#ef4444';
-      lblSpan.textContent = vec.label;
+      lblSpan.textContent = vectors[i].label;
       var stSpan = document.createElement('span');
-      var markSpan = document.createElement('span'); // outlier marker, filled at finalize
+      stSpan.style.color = '#6b7280';
+      stSpan.textContent = ' [pending]';
+      var markSpan = document.createElement('span');
       markSpan.style.fontWeight = 'bold';
       row.appendChild(idxSpan);
       row.appendChild(lblSpan);
       row.appendChild(stSpan);
       row.appendChild(markSpan);
       results.appendChild(row);
+      records.push({ idx: i + 1, label: vectors[i].label, status: null, length: null, row: row, stSpan: stSpan, markSpan: markSpan });
+    }
 
-      var rec = { idx: i + 1, label: vec.label, status: null, length: null, row: row, markSpan: markSpan };
-
-      try {
-        var resp = await sendReq(parsed.method, finalUrl, contentType, finalBody, finalCookie);
-        if (resp && resp.success) {
-          stSpan.textContent = ' [' + resp.status + ' ' + resp.statusText + ' | ' + resp.length + ' bytes]';
-          stSpan.style.color = (resp.status >= 200 && resp.status < 400) ? '#22c55e' : '#ef4444';
-          rec.status = resp.status;
-          rec.length = resp.length;
-        } else if (resp && resp.aborted) {
-          stSpan.textContent = ' [Timeout]';
-          stSpan.style.color = '#f59e0b';
-        } else {
-          stSpan.textContent = ' [Error: ' + (resp && resp.error ? resp.error : 'Unknown') + ']';
-          stSpan.style.color = '#ef4444';
-        }
-      } catch (err) {
-        stSpan.textContent = ' [Error: ' + err.message + ']';
-        stSpan.style.color = '#ef4444';
-      }
-
-      records.push(rec);
-      results.scrollTop = results.scrollHeight;
-      if (!stopped && !signal.aborted) {
-        await new Promise(function (r) { return setTimeout(r, window.KHackBar.Config.FUZZ_DELAY); });
+    function applyResp(rec, resp) {
+      var st = rec.stSpan;
+      if (resp && resp.success) {
+        st.textContent = ' [' + resp.status + ' ' + resp.statusText + ' | ' + resp.length + ' bytes]';
+        st.style.color = (resp.status >= 200 && resp.status < 400) ? '#22c55e' : '#ef4444';
+        rec.status = resp.status;
+        rec.length = resp.length;
+      } else if (resp && resp.aborted) {
+        st.textContent = ' [Timeout]';
+        st.style.color = '#f59e0b';
+      } else {
+        st.textContent = ' [Error: ' + (resp && resp.error ? resp.error : 'Unknown') + ']';
+        st.style.color = '#ef4444';
       }
     }
+
+    var nextIndex = 0, completed = 0;
+    var startedAt = Date.now();
+
+    async function workerLoop() {
+      while (true) {
+        if (stopped || signal.aborted) return;
+        var i = nextIndex++;
+        if (i >= vectors.length) return;
+
+        var vec = vectors[i];
+        var rec = records[i];
+        var finalUrl = fillTemplate(parsed.urlTemplate, vec.rendered);
+        var finalBody = (parsed.method === 'GET' || parsed.method === 'HEAD')
+          ? '' : fillTemplate(parsed.bodyTemplate, vec.rendered);
+        var finalCookie = hasCookie ? fillTemplate(parsed.cookieTemplate, vec.rendered) : '';
+
+        try {
+          var resp = await sendReq(parsed.method, finalUrl, contentType, finalBody, finalCookie);
+          applyResp(rec, resp);
+        } catch (err) {
+          rec.stSpan.textContent = ' [Error: ' + err.message + ']';
+          rec.stSpan.style.color = '#ef4444';
+        }
+
+        completed++;
+        if (completed % 25 === 0 || completed === vectors.length) {
+          var rate = Math.round(completed / Math.max(0.001, (Date.now() - startedAt) / 1000));
+          window.KHackBar.UI.setText(status, '[+] ' + modeName + ' ' + completed + '/' + vectors.length + ' (' + rate + ' req/s)...');
+          results.scrollTop = results.scrollHeight;
+        }
+        if (delay > 0 && !stopped && !signal.aborted) {
+          await new Promise(function (r) { return setTimeout(r, delay); });
+        }
+      }
+    }
+
+    var pool = [];
+    for (var w = 0; w < concurrency; w++) pool.push(workerLoop());
+    await Promise.all(pool);
 
     setRunning(false);
     highlightOutliers();
+    var secs = ((Date.now() - startedAt) / 1000).toFixed(1);
     if (!stopped && !signal.aborted) {
-      window.KHackBar.UI.setText(status, '[+] ' + (attack === 'sniper' ? 'Sniper' : 'Cluster Bomb') + ' completed (' + vectors.length + ' requests).');
-      logAudit('intruder_completed', probeUrlFor(parsed), 'Completed ' + vectors.length + ' requests');
+      window.KHackBar.UI.setText(status, '[+] ' + modeName + ' completed — ' + vectors.length + ' requests in ' + secs + 's.');
+      logAudit('intruder_completed', probeUrlFor(parsed), 'Completed ' + vectors.length + ' requests in ' + secs + 's');
+    } else {
+      window.KHackBar.UI.setText(status, '[!] Intruder stopped (' + completed + '/' + vectors.length + ' done).');
     }
+  }
+
+  function clampInt(v, def, min, max) {
+    var n = parseInt(v, 10);
+    if (isNaN(n)) n = def;
+    return Math.max(min, Math.min(max, n));
   }
 
   // Find the "odd ones out" by response length: the common length is the mode,
@@ -868,4 +925,99 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
   if (btnSortLen) btnSortLen.onclick = function () { sortResults('len'); };
   if (btnSortStatus) btnSortStatus.onclick = function () { sortResults('status'); };
   if (btnSortIdx) btnSortIdx.onclick = function () { sortResults('idx'); };
+
+  // ---- Generate CSRF PoC (Burp-style) ----
+  function htmlEscapeAttr(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // Build a self-submitting HTML page that reproduces the current request. Uses
+  // the base values (markers stripped), like Burp's "Generate CSRF PoC".
+  function buildCsrfPoc() {
+    var parsed = parseAll();
+    var url = fillTemplate(parsed.urlTemplate, parsed.bases);
+    if (!/^https?:\/\//i.test(url)) return { error: 'Enter a full http(s) target URL first.' };
+    var method = parsed.method || 'POST';
+    var body = (method === 'GET' || method === 'HEAD') ? '' : fillTemplate(parsed.bodyTemplate, parsed.bases);
+    var ctype = (ctypeEl && ctypeEl.value ? ctypeEl.value : 'application/x-www-form-urlencoded').split(';')[0].trim().toLowerCase();
+
+    var html;
+    if (method === 'GET') {
+      html = '<html>\n  <body>\n    <form action="' + htmlEscapeAttr(url) + '" method="GET">\n' +
+             '      <input type="submit" value="Submit request">\n    </form>\n' +
+             '    <script>document.forms[0].submit();</script>\n  </body>\n</html>\n';
+    } else if (ctype === 'application/x-www-form-urlencoded' || ctype === 'multipart/form-data') {
+      var enctypeAttr = ctype === 'multipart/form-data' ? ' enctype="multipart/form-data"' : '';
+      var inputs = '';
+      body.split('&').forEach(function (pair) {
+        if (!pair) return;
+        var eq = pair.indexOf('=');
+        var rawK = eq === -1 ? pair : pair.slice(0, eq);
+        var rawV = eq === -1 ? '' : pair.slice(eq + 1);
+        var k, v;
+        try { k = decodeURIComponent(rawK.replace(/\+/g, ' ')); } catch (e) { k = rawK; }
+        try { v = decodeURIComponent(rawV.replace(/\+/g, ' ')); } catch (e) { v = rawV; }
+        inputs += '      <input type="hidden" name="' + htmlEscapeAttr(k) + '" value="' + htmlEscapeAttr(v) + '">\n';
+      });
+      html = '<html>\n  <body>\n    <form action="' + htmlEscapeAttr(url) + '" method="POST"' + enctypeAttr + '>\n' +
+             inputs +
+             '      <input type="submit" value="Submit request">\n    </form>\n' +
+             '    <script>document.forms[0].submit();</script>\n  </body>\n</html>\n';
+    } else {
+      // JSON / raw body — a normal form can't set this content-type, so use a
+      // credentialed fetch. NOTE: cross-site this triggers a CORS preflight, so
+      // it only works against endpoints that don't enforce CORS on the request.
+      html = '<html>\n  <body>\n    <script>\n' +
+             '      // Cross-site fetch PoC. A JSON content-type triggers a CORS\n' +
+             '      // preflight, so this works only if the target does not enforce it.\n' +
+             '      fetch(' + JSON.stringify(url) + ', {\n' +
+             '        method: ' + JSON.stringify(method) + ',\n' +
+             '        credentials: "include",\n' +
+             '        headers: { "Content-Type": ' + JSON.stringify(ctype || 'text/plain') + ' },\n' +
+             '        body: ' + JSON.stringify(body) + '\n' +
+             '      });\n    </script>\n  </body>\n</html>\n';
+    }
+    return { html: html };
+  }
+
+  if (btnCsrf && csrfOutput && csrfWrap) {
+    btnCsrf.onclick = function () {
+      var res = buildCsrfPoc();
+      if (res.error) { window.KHackBar.UI.setText(status, '[!] ' + res.error); return; }
+      csrfOutput.value = res.html;
+      csrfWrap.style.display = 'block';
+      window.KHackBar.UI.setText(status, '[+] CSRF PoC generated. Copy / download / open it, then load it in a logged-in browser to test.');
+      logAudit('intruder_csrf_poc', '', 'Generated CSRF PoC');
+    };
+  }
+  if (btnCsrfCopy && csrfOutput) {
+    btnCsrfCopy.onclick = function () {
+      navigator.clipboard.writeText(csrfOutput.value)
+        .then(function () { window.KHackBar.UI.setText(status, '[+] CSRF PoC copied to clipboard.'); })
+        .catch(function () { csrfOutput.select(); window.KHackBar.UI.setText(status, '[!] Copy failed — text selected, press Ctrl+C.'); });
+    };
+  }
+  if (btnCsrfDownload && csrfOutput) {
+    btnCsrfDownload.onclick = function () {
+      if (!csrfOutput.value) return;
+      var blob = new Blob([csrfOutput.value], { type: 'text/html' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'csrf-poc.html';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    };
+  }
+  if (btnCsrfOpen && csrfOutput) {
+    btnCsrfOpen.onclick = function () {
+      if (!csrfOutput.value) return;
+      var blob = new Blob([csrfOutput.value], { type: 'text/html' });
+      var u = URL.createObjectURL(blob);
+      if (chrome.tabs && chrome.tabs.create) chrome.tabs.create({ url: u });
+      else window.open(u, '_blank');
+    };
+  }
 };
