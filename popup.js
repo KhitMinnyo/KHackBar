@@ -87,71 +87,39 @@ document.addEventListener('DOMContentLoaded', function () {
   // ============================================================
   // 2. Encoding buttons
   // ============================================================
-  if (encBtns.url) {
-    encBtns.url.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.url.encode(urlBox.value);
-    };
+  // Each encoder/decoder now works on the SELECTED text in the URL box, so you
+  // can transform just a payload (e.g. Unicode-escape only the injection string)
+  // instead of mangling the whole URL. The transformed text stays selected, so
+  // clicking the matching D-* button decodes it straight back. With nothing
+  // selected it falls back to the whole box (the old behaviour).
+  function applyEnc(fn, label) {
+    var appliedToSelection = KHackBar.UI.transformSelection(urlBox, fn);
+    if (!appliedToSelection) {
+      urlBox.value = fn(urlBox.value);
+      setStatus('[+] ' + label + ' applied to the whole URL box (select text first to target just a payload).');
+    } else {
+      setStatus('[+] ' + label + ' applied to selection.');
+    }
   }
-  if (encBtns.durl) {
-    encBtns.durl.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.url.decode(urlBox.value);
-    };
+
+  function wireEnc(btn, fn, label) {
+    if (btn) btn.onclick = function () { applyEnc(fn, label); };
   }
-  if (encBtns.hex) {
-    encBtns.hex.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.hex.encode(urlBox.value);
-    };
-  }
-  if (encBtns.dhex) {
-    encBtns.dhex.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.hex.decode(urlBox.value);
-    };
-  }
-  if (encBtns.b64) {
-    encBtns.b64.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.b64.encode(urlBox.value);
-    };
-  }
-  if (encBtns.db64) {
-    encBtns.db64.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.b64.decode(urlBox.value);
-    };
-  }
-  if (encBtns.html) {
-    encBtns.html.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.html.encode(urlBox.value);
-    };
-  }
-  if (encBtns.dhtml) {
-    encBtns.dhtml.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.html.decode(urlBox.value);
-    };
-  }
-  if (encBtns.durl2) {
-    encBtns.durl2.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.durl.encode(urlBox.value);
-    };
-  }
-  if (encBtns.ddurl2) {
-    encBtns.ddurl2.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.durl.decode(urlBox.value);
-    };
-  }
-  if (encBtns.uni) {
-    encBtns.uni.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.uni.encode(urlBox.value);
-    };
-  }
-  if (encBtns.duni) {
-    encBtns.duni.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.uni.decode(urlBox.value);
-    };
-  }
-  if (encBtns.reverse) {
-    encBtns.reverse.onclick = function () {
-      urlBox.value = KHackBar.UI.encoder.reverse(urlBox.value);
-    };
-  }
+
+  var E = KHackBar.UI.encoder;
+  wireEnc(encBtns.url,    E.url.encode,   'URL encode');
+  wireEnc(encBtns.durl,   E.url.decode,   'URL decode');
+  wireEnc(encBtns.hex,    E.hex.encode,   'Hex encode');
+  wireEnc(encBtns.dhex,   E.hex.decode,   'Hex decode');
+  wireEnc(encBtns.b64,    E.b64.encode,   'Base64 encode');
+  wireEnc(encBtns.db64,   E.b64.decode,   'Base64 decode');
+  wireEnc(encBtns.html,   E.html.encode,  'HTML encode');
+  wireEnc(encBtns.dhtml,  E.html.decode,  'HTML decode');
+  wireEnc(encBtns.durl2,  E.durl.encode,  'Double-URL encode');
+  wireEnc(encBtns.ddurl2, E.durl.decode,  'Double-URL decode');
+  wireEnc(encBtns.uni,    E.uni.encode,   'Unicode encode');
+  wireEnc(encBtns.duni,   E.uni.decode,   'Unicode decode');
+  wireEnc(encBtns.reverse, E.reverse,     'Reverse');
 
   // ============================================================
   // 3. LOAD / SPLIT / EXECUTE / POST buttons
@@ -264,6 +232,53 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     };
   }
+
+  // ---- Copy as sqlmap command ----
+  // Turns the current POST section (URL + POST data + content-type + the live
+  // cookies for that host) into a ready-to-run sqlmap command.
+  (function () {
+    var btnSqlmap = document.getElementById('btn_copy_sqlmap');
+    var sqlmapOut = document.getElementById('sqlmap_output');
+    if (!btnSqlmap) return;
+
+    function shq(s) { return '"' + String(s).replace(/(["$`\\])/g, '\\$1') + '"'; }
+
+    btnSqlmap.onclick = function () {
+      var url = collapseUrl(urlBox.value);
+      if (!/^https?:\/\//i.test(url)) { setStatus('[!] Enter a full http(s) URL first.'); return; }
+      var data = postBox ? postBox.value.trim() : '';
+      var ct = contentType ? contentType.value : '';
+
+      function build(cookieStr) {
+        var cmd = 'sqlmap -u ' + shq(url);
+        if (data) cmd += ' --data=' + shq(data);
+        if (cookieStr) cmd += ' --cookie=' + shq(cookieStr);
+        // JSON bodies: hint sqlmap to treat the data as-is.
+        if (ct && ct.toLowerCase().indexOf('json') !== -1) cmd += ' --headers=' + shq('Content-Type: application/json');
+        cmd += ' --batch --level=2 --risk=2';
+        if (sqlmapOut) { sqlmapOut.style.display = 'block'; sqlmapOut.value = cmd; }
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(cmd)
+            .then(function () { setStatus('[+] sqlmap command copied to clipboard.'); })
+            .catch(function () { if (sqlmapOut) sqlmapOut.select(); setStatus('[!] Copy failed — command shown below, press Ctrl+C.'); });
+        } else {
+          if (sqlmapOut) sqlmapOut.select();
+          setStatus('[+] sqlmap command generated (select + copy below).');
+        }
+      }
+
+      // Pull the live cookies for the target so authenticated SQLi works.
+      try {
+        chrome.cookies.getAll({ url: url }, function (cookies) {
+          var cookieStr = (!chrome.runtime.lastError && cookies && cookies.length)
+            ? cookies.map(function (c) { return c.name + '=' + c.value; }).join('; ') : '';
+          build(cookieStr);
+        });
+      } catch (e) {
+        build('');
+      }
+    };
+  })();
 
   // ============================================================
   // 3b. POST Capture (Burp-style auto-fill)
@@ -378,10 +393,10 @@ document.addEventListener('DOMContentLoaded', function () {
   ];
 
   categories.forEach(function (cat) {
-    // 'waf' and 'union' are populated separately by their own renderers
-    // (see waf.js / union.js) — they use generated/selection-based
+    // 'waf', 'union' and 'wafunion' are populated separately by their own
+    // renderers (see waf.js / union.js) — they use generated/selection-based
     // buttons instead of a flat list of fixed payloads.
-    if (cat.id === 'waf' || cat.id === 'union') return;
+    if (cat.id === 'waf' || cat.id === 'union' || cat.id === 'wafunion' || cat.id === 'ssti') return;
 
     var panel = document.getElementById(cat.panelId);
     if (!panel) return;
@@ -410,6 +425,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // UNION panel: column-count-aware UNION SELECT generator (see union.js)
   KHackBar.Union.render(document.getElementById('union_panel'), urlBox);
+
+  // WAFuNiON panel: same generator, PURE WAF-bypass UNION SELECT variants
+  KHackBar.Union.renderWaf(document.getElementById('wafunion_panel'), urlBox);
+
+  // SSTI panel: detection probes + fingerprint table + per-engine exploitation
+  if (KHackBar.Ssti) KHackBar.Ssti.render(document.getElementById('ssti_panel'), urlBox);
 
   // ============================================================
   // 5. Menu toggle logic (payload panels)
@@ -645,7 +666,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ============================================================
   var headerTitle = document.querySelector('.header h3');
   if (headerTitle) {
-    headerTitle.textContent = 'KHackBar v2.0 Pro';
+    headerTitle.textContent = 'KHackBar v2.1 Pro';
   }
 
   // Initial status

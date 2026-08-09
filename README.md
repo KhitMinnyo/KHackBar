@@ -1,8 +1,8 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.0 Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.1 Pro**
 
-> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.0** (Burp-style Intruder: Sniper & Cluster Bomb, concurrency, CSRF PoC)
+> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.1** (Burp-style Intruder, fingerprint-driven SSTI, cookie editor, pure payloads, sqlmap export)
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -42,16 +42,17 @@ Craft and send HTTP POST requests directly from the extension with support for:
 - **Multipart** (`multipart/form-data`)
 
 ### 🔐 Encoders & Decoders
-Built-in encoding/decoding tools for quick payload transformation:
+Built-in encoding/decoding tools that transform the **selected text** in the URL box (or the whole box if nothing is selected) — so you can encode just a payload and decode it straight back:
+- **URL** and **Double-URL** encode/decode
 - **Hex** encode/decode
 - **Base64** encode/decode
 - **HTML Entity** encode/decode
 - **Unicode** escape/unescape
-- **URL** encode/decode
+- **Reverse**
 
 ---
 
-## 🆕 What's New in v2.0
+## 🆕 What's New in v2.1
 
 ### 🎯 Intruder — Sniper & Cluster Bomb
 A new **Intruder** section under the FUZZER tab brings Burp-style multi-position attacks to POST (and GET) requests:
@@ -76,8 +77,20 @@ One click turns the Intruder's URL + body + method + content-type into a self-su
 ### 🎣 Reliable POST auto-capture → Intruder
 POST auto-capture is now done by **in-page content scripts** (native `<form>` submissions, `fetch`/`XHR`, and programmatic `form.submit()` for ASP.NET `__doPostBack`), so it no longer misses logins when the MV3 service worker is asleep. Capture auto-enables while the panel is open, and a **⬇ Load captured POST** button drops the captured request straight into the Intruder.
 
-### 🔠 Larger, readable UI
-All FUZZER-panel text, dropdowns, buttons and helper text are now 15px (Request body 16px), plus the POST section's content-type dropdown and buttons — comfortable on large / high-DPI screens.
+### 🧬 Fingerprint-driven SSTI panel
+The **SSTI** tab now walks you through detection → identification → exploitation: fire a detection probe (`{{7*7}}`, `${7*7}`, `<%= 7*7 %>`, `#{7*7}`, `@(7*7)`, or a polyglot), match the response against a built-in **fingerprint table** (e.g. `{{7*'7'}}` → `7777777` = Jinja2 vs `49` = Twig; `${7*7}` = FreeMarker/EL; `<%= 7*7 %>` = ERB/EJS; `@(7*7)` = Razor), then use that engine's section (Jinja2, Twig, FreeMarker, Velocity, Smarty, ERB, Mako, Node) for config-read and RCE.
+
+### 🧼 Pure, context-free payloads across the SQLi tabs
+The **MySqlDIOS, PostgreSQL, LocalDIOS, MsSQL, ERROR, Blind, UNION** and **WAFuNiON** tabs were rebuilt to emit **pure** payloads — no `'`/`1'` prefix and no `-- -` comment — so each entry is a building block you add your own context to. Redundant near-duplicates were removed, and `ORDER BY` probes collapsed to a single form. **UNION** and **WAFuNiON** are column-count generators (WAFuNiON produces pure WAF-bypass variants); the WAF tab's **Comment Injection (MySQL)** group grew from 5 to 18 techniques.
+
+### 🍪 Interactive Cookie editor / injector
+The **COOKIES** tab is no longer view-only: edit any cookie value and **Save** to write it live (via `chrome.cookies.set`, preserving path/secure/httpOnly/sameSite), **Delete** it, or **Add / inject** a new one — so you can drop a payload straight into a session/role cookie and browse with it.
+
+### 🧪 Copy as sqlmap command
+The **POST** section can turn the current URL + POST data + content-type + the host's live cookies into a ready-to-run `sqlmap -u "…" --data="…" --cookie="…" --batch --level=2 --risk=2` command (JSON bodies add the matching `--headers`).
+
+### 🔤 Selection-aware encoders/decoders
+The encoder bar (URL, Hex, Base64, HTML, 2×URL, Unicode, Reverse and their decoders) now transforms the **selected** text in the URL box instead of the whole box — Unicode-escape just a payload, then click the matching **D-*** button to decode it straight back. With nothing selected it falls back to the whole box.
 
 ---
 
@@ -258,18 +271,22 @@ Click the puzzle piece icon (Extensions menu) in the Chrome toolbar, find **KHac
 ```
 KHackBar/
 ├── manifest.json          # Chrome Extension Manifest V3 config
-├── background.js          # Service worker for background tasks
+├── background.js          # Service worker (POST/fuzz requests, header & cookie rules, capture relay)
 ├── popup.html             # Side Panel UI markup
 ├── popup.js               # Main initializer
+├── config.js              # Shared configuration constants
 ├── payloads.js            # Payload library definitions
-├── ui.js                  # UI rendering, menu switching, DOM helpers
+├── ui.js                  # UI rendering, menu switching, DOM & encoder helpers
 ├── waf.js                 # WAF Bypass panel (selection-based wrap/transform templates)
-├── union.js               # UNION SELECT generator (column-count aware)
+├── union.js               # UNION / WAFuNiON generators (column-count aware, pure output)
+├── ssti.js                # SSTI panel (detection probes, fingerprint table, per-engine RCE)
 ├── scope.js               # Target scope validation
 ├── audit.js               # Audit log storage and rendering helpers
-├── fuzzer.js              # Fuzzer / repeater logic
+├── fuzzer.js              # Fuzzer + Intruder (Sniper/Cluster Bomb, concurrency, CSRF PoC)
 ├── headers.js             # Custom header management
-├── cookies.js             # Cookie viewer/editor logic
+├── cookies.js             # Interactive cookie editor / injector
+├── capture-content.js     # In-page POST capture (isolated world: form submits + relay)
+├── capture-main.js        # In-page POST capture (MAIN world: fetch/XHR/form.submit hooks)
 ├── settings.js            # Scope, config import/export, audit settings
 └── README.md              # Documentation
 ```
@@ -286,12 +303,14 @@ KHackBar follows a clean modular architecture to keep the codebase organized and
 | **`payloads.js`** | Defines the categorized payload library (SQLi, XSS, LFI, etc.) |
 | **`ui.js`** | Handles UI rendering, menu switching, DOM manipulation helpers |
 | **`waf.js`** | Renders the WAF Bypass panel — wraps/transforms the URL box selection using bypass templates instead of inserting fixed strings |
-| **`union.js`** | Renders the UNION panel — asks for column count and text-column positions, generates matching `UNION SELECT` payloads |
+| **`union.js`** | Renders the UNION & WAFuNiON panels — column-count-aware generators producing pure `UNION SELECT` / WAF-bypass payloads |
+| **`ssti.js`** | Renders the SSTI panel — detection probes, engine fingerprint table, and per-engine exploitation sections |
 | **`scope.js`** | Validates target URLs against the allowed scope list |
 | **`audit.js`** | Manages audit log storage and renders audit entries |
-| **`fuzzer.js`** | Implements the automated fuzzer / repeater engine |
+| **`fuzzer.js`** | Implements the fuzzer plus the Burp-style Intruder (Sniper/Cluster Bomb, concurrency, outlier highlighting, CSRF PoC) |
 | **`headers.js`** | Manages custom header injection via `declarativeNetRequest` |
-| **`cookies.js`** | Provides cookie viewing, editing, and creation logic |
+| **`cookies.js`** | Interactive cookie editor/injector — view, edit, inject, and delete live cookies |
+| **`capture-content.js` / `capture-main.js`** | In-page POST capture (form submissions and fetch/XHR/`form.submit`) that survives MV3 service-worker sleep |
 | **`settings.js`** | Handles scope configuration, config import/export, and audit settings |
 
 Each module encapsulates a distinct feature domain and communicates through well-defined interfaces. This separation of concerns improves maintainability, makes testing easier, and significantly reduces the risk of large single-file bugs — such as the critical XSS vulnerability that was recently patched in the HTML encoder.

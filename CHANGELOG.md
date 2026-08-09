@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [2.0] — 2026-08-03
+## [2.1] — 2026-08-09
 
-A major release: a full Burp-style **Intruder** (Sniper & Cluster Bomb) with
+A major release. A full Burp-style **Intruder** (Sniper & Cluster Bomb) with
 concurrency, cookie injection, response-length outlier detection, CSRF PoC
-generation, reliable POST auto-capture, and a larger, more readable UI.
+generation, reliable POST auto-capture, and a larger, more readable UI — plus a
+payload-quality overhaul: **pure (context-free) payloads** across the SQLi tabs,
+a **fingerprint-driven SSTI** panel, an **interactive cookie editor/injector**,
+and a **Copy as sqlmap** export.
 
 
 ### Added
@@ -67,6 +70,66 @@ generation, reliable POST auto-capture, and a larger, more readable UI.
 - **`fuzz_post_request` background handler.** Intruder requests are routed through
   the background service worker (like `execute_post`) so cross-origin targets are
   reached reliably via the extension's `host_permissions`.
+
+### Added — tooling
+- **Encoders/decoders now work on the selection.** The encoder bar (URL, Hex,
+  Base64, HTML, 2×URL, Unicode, Reverse and their decoders) transforms the
+  *selected* text in the URL box instead of the whole box — so you can, e.g.,
+  Unicode-escape only the injection string. The result stays selected, so the
+  matching **D-*** button decodes it straight back; with nothing selected it
+  falls back to the whole box (the old behaviour), with a status hint either way.
+- **SSTI tab rebuilt into a fingerprint-driven panel.** New `ssti.js` renderer:
+  detection probes (`{{7*7}}`, `${7*7}`, `<%= 7*7 %>`, `#{7*7}`, `@(7*7)`, a
+  polyglot), a **fingerprint reference** mapping the response to the engine
+  (e.g. `{{7*'7'}}` → `7777777` = Jinja2 vs `49` = Twig; `${7*7}` = FreeMarker/EL;
+  `<%= 7*7 %>` = ERB/EJS; `@(7*7)` = Razor), and per-engine exploitation sections
+  (Jinja2, Twig, FreeMarker, Velocity, Smarty, ERB, Mako, Node) for config-read
+  and RCE.
+- **Blind SQLi tab rebuilt as pure payloads.** Dropped the `1'`/`'`/`-- -`
+  wrappers and the duplicate `SLEEP(5/10/15)` / `BENCHMARK` variants for 15 pure
+  building blocks: boolean, time-based (MySQL `SLEEP`, PostgreSQL `pg_sleep`,
+  MSSQL `WAITFOR`), boolean data-extraction, and conditional time-based extraction.
+- **PostgreSQL / LocalDIOS / MsSQL / ERROR tabs rebuilt as pure payloads.**
+  Dropped the `'`/`1'` prefixes and `-- -` comments across all four so each entry
+  is a pure building block you add context to: PostgreSQL → `CAST(… AS int)` and
+  `::int` cast-error forms; LocalDIOS → bare `LOAD_FILE(…)` (UNION column), plus a
+  hex-path and error-based form; MsSQL → boolean/UNION/error/time/stacked blocks
+  with a single `ORDER BY 1` probe (no auth-bypass quote strings); ERROR → bare
+  quote/backslash probes, one each of `ORDER BY`/`GROUP BY`/`HAVING`, and pure
+  MySQL/MSSQL/PostgreSQL error-extraction expressions. Redundant near-duplicates
+  removed throughout.
+- **MySQL DIOS rebuilt as pure, diverse payloads.** The MySqlDIOS tab dropped the
+  12 near-identical `' OR (COUNT/RAND…)-- -` strings for 19 **pure** expressions
+  (no leading quote, no trailing comment) across four real techniques: true DIOS
+  one-shot accumulator, `GROUP_CONCAT` schema/table/column/credential enumeration,
+  scalar server-info subqueries, error-based `extractvalue`/`updatexml`, and the
+  `COUNT()/RAND() GROUP BY` error trick — drop each into your own context.
+- **More MySQL comment-injection WAF bypasses.** The WAF tab's *Comment Injection
+  (MySQL)* group grew from 5 to 18 techniques: extra versioned comments
+  (`/*!30000…*/`, `/*!00000…*/`, `/*!99999…*/`), spaced (`/*! … */`), nested
+  (`/*!/*!…*/*/`), before/after-only `/**/`, empty versioned comments around the
+  selection, and trailing `-- -` / `%23` / `%00` terminators.
+- **Pure UNION SELECT variant.** The UNION generator now offers a plain
+  `UNION SELECT 1,2,3,4` (no context prefix like `')`, no trailing comment) as
+  the first option, for manual column probing where you supply the surrounding
+  context yourself. The column-count / text-column / overrides logic still applies.
+- **WAFuNiON is now a generator too.** The WAF UNION tab was a fixed payload
+  list; it's now the same column-count generator producing **pure WAF-bypass**
+  UNION SELECT variants (inline `/**/` comments, `/*!…*/` and `/*!50000…*/`
+  versioned comments, `%0a`/`%09` whitespace, `UNION(SELECT …)`, `UNION ALL/DISTINCT`,
+  mixed case) — all with no context prefix and no trailing comment, so you add
+  your own context as the target needs.
+- **Interactive Cookie editor / injector.** The COOKIES tab is no longer view-only:
+  each cookie's value is editable with **Save** (writes the live cookie via
+  `chrome.cookies.set`, preserving path/secure/httpOnly/sameSite) and **Delete**,
+  plus an **Add / inject cookie** form — so you can drop a payload (e.g.
+  `' OR 1=1-- -`) straight into a session/role cookie and browse with it.
+- **Copy as sqlmap command.** The POST section can turn the current URL + POST
+  data + content-type + the live cookies for that host into a ready-to-run
+  `sqlmap -u "…" --data="…" --cookie="…" --batch --level=2 --risk=2` command
+  (JSON bodies add the matching `--headers`). Copies to clipboard and shows the
+  command for manual copy. The same request can be pulled into the Intruder via
+  **Load captured POST** — it's the identical POST data.
 
 ### Fixed
 - **POST auto-capture now works reliably.** The webRequest-based capture could
@@ -132,6 +195,6 @@ generation, reliable POST auto-capture, and a larger, more readable UI.
   execution, encoders/decoders, scope enforcement, and audit logging — all in a
   side-panel, Red Team-themed UI on Manifest V3.
 
-[2.0]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.0
+[2.1]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.1
 [1.8]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v1.8
 [1.3]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v1.3

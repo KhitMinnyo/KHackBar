@@ -190,23 +190,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'execute_post') {
-    fetch(message.url, {
-      method: 'POST',
-      headers: { 'Content-Type': message.contentType },
-      body: message.data
-    })
-      .then(async (response) => {
-        const responseText = await response.text();
-        sendResponse({
-          success: true,
-          status: response.status,
-          statusText: response.statusText,
-          length: responseText.length
-        });
-      })
-      .catch((err) => {
-        sendResponse({ success: false, error: err.message });
-      });
+    runSimplePost(message).then(sendResponse);
     return true; // keep channel open for async sendResponse
   }
 
@@ -258,6 +242,59 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep channel open for async sendResponse
   }
 });
+
+/**
+ * Execute the plain POST from the POST section. Runs in the background worker
+ * so the extension's host_permissions handle cross-origin. Hardened over the
+ * original bare fetch: timeout, credentials (session cookies), no clobbering of
+ * multipart boundaries, and a diagnostic error message.
+ */
+async function runSimplePost(message) {
+  const timeoutMs = 30000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const url = (message.url || '').trim();
+  if (!/^https?:\/\//i.test(url)) {
+    clearTimeout(timeoutId);
+    return { success: false, error: 'URL must start with http:// or https:// (got: "' + url.slice(0, 40) + '").' };
+  }
+
+  const init = {
+    method: 'POST',
+    signal: controller.signal,
+    credentials: 'include', // send the site's cookies, like a real browser POST
+    body: message.data != null ? message.data : ''
+  };
+  const ct = (message.contentType || 'application/x-www-form-urlencoded');
+  // For multipart, a manual Content-Type without a boundary makes the body
+  // unparseable — only set an explicit header for non-multipart types.
+  if (ct.toLowerCase().indexOf('multipart/form-data') === -1) {
+    init.headers = { 'Content-Type': ct };
+  }
+
+  try {
+    const response = await fetch(url, init);
+    clearTimeout(timeoutId);
+    const responseText = await response.text();
+    return {
+      success: true,
+      status: response.status,
+      statusText: response.statusText,
+      length: responseText.length
+    };
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      return { success: false, error: 'Timed out after ' + timeoutMs + 'ms — the host did not respond.' };
+    }
+    let hint = '';
+    if ((err.message || '').indexOf('Failed to fetch') !== -1) {
+      hint = ' — host may be unreachable or expired (e.g. a closed PortSwigger lab), DNS failed, or the URL is wrong. Open the URL in a normal tab to confirm it is live.';
+    }
+    return { success: false, error: (err.message || 'Unknown error') + hint };
+  }
+}
 
 // Reserved DNR rule id for the Intruder's per-request Cookie injection.
 const FUZZ_COOKIE_RULE_ID = 900001;
