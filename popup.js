@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var btnSplit = document.getElementById('btn_split');
   var btnExecute = document.getElementById('btn_execute');
   var btnExecutePost = document.getElementById('btn_execute_post');
+  var btnExecutePostTab = document.getElementById('btn_execute_post_tab');
 
   // ---- Encoding buttons ----
   var encBtns = {
@@ -167,6 +168,55 @@ document.addEventListener('DOMContentLoaded', function () {
       .join('&');
   }
 
+  // ---- Helper: build a tiny self-submitting HTML page that replays the POST
+  // as a REAL browser navigation (used by "POST -> Tab" below). Same technique
+  // as the Intruder's "Generate CSRF PoC": a plain <form> for urlencoded/
+  // multipart bodies, so the tab performs a normal top-level POST with full
+  // cookie/session handling — redirects and the resulting page are all
+  // visible, exactly as if the user had submitted the form themselves.
+  function htmlEscapeAttr(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function buildPostSelfSubmitHtml(url, body, contentType) {
+    var ctype = (contentType || 'application/x-www-form-urlencoded').split(';')[0].trim().toLowerCase();
+
+    if (ctype === 'application/x-www-form-urlencoded' || ctype === 'multipart/form-data') {
+      var enctypeAttr = ctype === 'multipart/form-data' ? ' enctype="multipart/form-data"' : '';
+      var inputs = '';
+      (body || '').split('&').forEach(function (pair) {
+        if (!pair) return;
+        var eq = pair.indexOf('=');
+        var rawK = eq === -1 ? pair : pair.slice(0, eq);
+        var rawV = eq === -1 ? '' : pair.slice(eq + 1);
+        var k, v;
+        try { k = decodeURIComponent(rawK.replace(/\+/g, ' ')); } catch (e) { k = rawK; }
+        try { v = decodeURIComponent(rawV.replace(/\+/g, ' ')); } catch (e) { v = rawV; }
+        inputs += '      <input type="hidden" name="' + htmlEscapeAttr(k) + '" value="' + htmlEscapeAttr(v) + '">\n';
+      });
+      return '<!DOCTYPE html>\n<html>\n  <body>\n    <form action="' + htmlEscapeAttr(url) + '" method="POST"' + enctypeAttr + '>\n' +
+             inputs +
+             '    </form>\n    <script>document.forms[0].submit();</script>\n  </body>\n</html>\n';
+    }
+
+    // JSON / raw body — a native <form> can't set this content-type, so fall
+    // back to a credentialed fetch inside the tab and print the result there.
+    // Cross-origin this triggers a CORS preflight, so it only works against
+    // targets that don't enforce CORS (same-origin/local targets are fine).
+    return '<!DOCTYPE html>\n<html>\n  <body style="font:12px monospace; background:#0a0a0a; color:#22c55e; padding:16px; white-space:pre-wrap;">Submitting POST to ' + htmlEscapeAttr(url) + ' …\n' +
+           '    <script>\n' +
+           '      fetch(' + JSON.stringify(url) + ', {\n' +
+           '        method: "POST",\n' +
+           '        credentials: "include",\n' +
+           '        headers: { "Content-Type": ' + JSON.stringify(ctype) + ' },\n' +
+           '        body: ' + JSON.stringify(body || '') + '\n' +
+           '      }).then(function (r) { return r.text().then(function (t) { document.body.textContent += "\\n\\nStatus: " + r.status + "\\n\\n" + t; }); })\n' +
+           '        .catch(function (e) { document.body.textContent += "\\n\\nRequest failed: " + e.message; });\n' +
+           '    </script>\n  </body>\n</html>\n';
+  }
+
   // EXECUTE: Send GET request to the URL
   if (btnExecute) {
     btnExecute.onclick = function () {
@@ -227,6 +277,49 @@ document.addEventListener('DOMContentLoaded', function () {
             setStatus('[+] POST response received (' + response.status + ').');
           } else if (response && response.error) {
             setStatus('[!] POST error: ' + response.error);
+          }
+        });
+      });
+    };
+  }
+
+  // POST -> Tab: submit the POST as a real navigation in the active tab,
+  // like EXECUTE does for GET, instead of an invisible background fetch.
+  // The plain "POST" button above is still there for silent/background
+  // testing (checking status codes without disturbing the tab); this one is
+  // for when you want to actually see the result — a login redirecting to a
+  // dashboard, a CSRF PoC's real effect, etc.
+  if (btnExecutePostTab) {
+    btnExecutePostTab.onclick = function () {
+      var target = collapseUrl(urlBox.value);
+      var postData = postBox ? postBox.value.trim() : '';
+      var ct = contentType ? contentType.value : 'application/x-www-form-urlencoded';
+
+      if (!target) {
+        setStatus('[!] URL box is empty.');
+        return;
+      }
+      if (!/^https?:\/\//i.test(target)) {
+        setStatus('[!] URL must start with http:// or https://.');
+        return;
+      }
+      KHackBar.Scope.getSavedScope(function (scopePattern) {
+        var scopeCheck = KHackBar.Scope.checkScope(target, scopePattern);
+        if (!scopeCheck.allowed) {
+          setStatus('[!] ' + scopeCheck.reason);
+          return;
+        }
+
+        var html = buildPostSelfSubmitHtml(target, postData, ct);
+        var blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+          if (tabs && tabs[0] && tabs[0].id) {
+            chrome.tabs.update(tabs[0].id, { url: blobUrl });
+            setStatus('[+] Submitting POST in the active tab: ' + target);
+            logAudit('execute_post_tab', target, 'POST submitted as a real tab navigation, content-type: ' + ct);
+          } else {
+            setStatus('[!] No active tab found.');
           }
         });
       });
@@ -625,6 +718,28 @@ document.addEventListener('DOMContentLoaded', function () {
       logAudit: logAudit
     });
   }
+
+  // ---- Fuzzer panel mode switch ----
+  // The FUZZER tab holds two distinct tools (the simple single-wordlist URL
+  // fuzzer, and the full Intruder). Showing both stacked at once meant
+  // scrolling past whichever one you didn't want. This shows only the
+  // selected tool; Intruder is the default (see the "selected" option in
+  // popup.html) since it's the one most people reach for.
+  (function () {
+    var modeSelect = document.getElementById('fuzzer_mode');
+    var simpleSection = document.getElementById('fuzzer_mode_simple');
+    var intruderSection = document.getElementById('fuzzer_mode_intruder');
+    if (!modeSelect || !simpleSection || !intruderSection) return;
+
+    function applyFuzzerMode() {
+      var isIntruder = modeSelect.value === 'intruder';
+      intruderSection.style.display = isIntruder ? 'flex' : 'none';
+      simpleSection.style.display = isIntruder ? 'none' : 'flex';
+    }
+
+    modeSelect.onchange = applyFuzzerMode;
+    applyFuzzerMode();
+  })();
 
   // ============================================================
   // 9. Settings module initialization

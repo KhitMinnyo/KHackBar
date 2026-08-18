@@ -147,6 +147,7 @@
       gap: 6px;
       margin-top: 6px;
       align-items: center;
+      flex-wrap: wrap;
     }
     .post-options button {
       flex: 0 0 auto;
@@ -337,11 +338,19 @@
       <option value="application/json">application/json</option>
       <option value="multipart/form-data">multipart/form-data</option>
     </select>
-    <button id="btn_execute_post" class="action-btn">
+    <button id="btn_execute_post" class="action-btn" title="Send the POST from the background — silent, doesn't touch the visible tab">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polygon points="5 3 19 12 5 21 5 3"/>
       </svg>
       POST
+    </button>
+    <button id="btn_execute_post_tab" class="action-btn" title="Submit the POST as a real navigation in the active tab — same as the user submitting the form (redirects, session/cookie changes, etc. are all visible)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+        <polyline points="15 3 21 3 21 9"/>
+        <line x1="10" y1="14" x2="21" y2="3"/>
+      </svg>
+      POST → Tab
     </button>
   </div>
   <div style="display:flex; align-items:center; gap:6px; margin-top:6px; width:100%;">
@@ -431,6 +440,13 @@
   <div id="cookies_status" style="width:100%; font-size:10px; color:#ef4444; margin-top:4px;"></div>
 </div>
 <div id="fuzzer_panel" class="panel" style="display:none; flex-direction:column;">
+  <div style="width:100%; margin-bottom:8px; font-size:10px; color:#ef4444;">Fuzzer tool:</div>
+  <select id="fuzzer_mode" class="content-type-select" style="width:100%; margin-bottom:10px;">
+    <option value="intruder" selected>🎯 Intruder — Sniper &amp; Cluster Bomb (multi-position, §§)</option>
+    <option value="simple">🔤 Simple URL Fuzzer (single wordlist, FUZZ keyword)</option>
+  </select>
+
+  <div id="fuzzer_mode_simple" style="display:none; flex-direction:column; width:100%;">
   <div style="width:100%; margin-bottom:6px; font-size:10px; color:#ef4444;">Target URL (use <b>FUZZ</b> or <b>[FUZZ]</b> as injection marker):</div>
   <input type="text" id="fuzzer_url" placeholder="e.g. https://example.com/page?id=FUZZ" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:12px; outline:none; font-family:inherit; margin-bottom:6px;">
   <div style="width:100%; margin-bottom:6px; font-size:10px; color:#ef4444;">Load default payloads:</div>
@@ -466,8 +482,9 @@
   <div style="width:100%; margin-top:6px; font-size:10px; color:#ef4444;">Results:</div>
   <div id="fuzzer_results" style="width:100%; background:#0a0a0a; border:1px solid #3f3f3f; border-radius:4px; padding:6px; max-height:300px; overflow-y:auto; font-size:10px; font-family:inherit; white-space:pre-wrap; word-break:break-all;"></div>
 
+  </div>
   <!-- ============ INTRUDER (Sniper / Cluster Bomb) ============ -->
-  <div style="width:100%; border-top:1px dashed #3f3f3f; margin:14px 0 8px;"></div>
+  <div id="fuzzer_mode_intruder" style="display:flex; flex-direction:column; width:100%;">
   <div style="width:100%; margin-bottom:6px; font-size:12px; color:#ef4444; font-weight:bold;">🎯 Intruder — Sniper &amp; Cluster Bomb</div>
   <div style="width:100%; margin-bottom:6px; font-size:10px; color:#a3a3a3;">Wrap each injection point with <b style="color:#ef4444;">§value§</b> (e.g. <code>user=§admin§&amp;pass=§x§</code>), then Detect positions.</div>
 
@@ -574,6 +591,7 @@
   </div>
   <div id="intruder_summary" style="width:100%; font-size:10px; color:#22c55e; margin:2px 0;"></div>
   <div id="intruder_results" style="width:100%; background:#0a0a0a; border:1px solid #3f3f3f; border-radius:4px; padding:6px; max-height:340px; overflow-y:auto; font-size:12.5px; line-height:1.5; font-family:inherit; white-space:pre-wrap; word-break:break-all;"></div>
+  </div>
 </div>
 <!-- SETTINGS PANEL -->
 <div id="settings_panel" class="panel" style="display:none; flex-direction:column;">

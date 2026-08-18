@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **POST → Tab.** A new button next to **POST** submits the request as a real
+  navigation in the active tab instead of a silent background fetch — same
+  technique as the Intruder's CSRF PoC (a self-submitting form for
+  urlencoded/multipart bodies, a credentialed `fetch()` for JSON), opened via
+  `chrome.tabs.update` on the active tab so redirects, session/cookie changes,
+  and the resulting page are all actually visible. The original **POST**
+  button is unchanged and still there for silent/background testing.
+- **FUZZER panel mode switch.** The URL Fuzzer and Intruder no longer sit
+  stacked in the same scroll — a **Fuzzer tool** dropdown at the top of the
+  FUZZER tab shows one at a time (Intruder by default).
+
+### Fixed
+- **Generate CSRF PoC dropped every query param for GET requests.** The GET
+  branch built a form with no fields, and a GET `<form>` submission replaces
+  the action URL's query string with the form's own fields — so submitting
+  the generated PoC silently stripped all query params (e.g. DVWA's CSRF
+  challenge, `?password_new=...&password_conf=...`) instead of reproducing
+  the request. Query params are now parsed into hidden inputs, same as the
+  POST branch does for the body.
+
+---
+
 ## [2.1] — 2026-08-09
 
 A major release. A full Burp-style **Intruder** (Sniper & Cluster Bomb) with

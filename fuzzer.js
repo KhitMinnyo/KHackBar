@@ -945,7 +945,30 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
 
     var html;
     if (method === 'GET') {
-      html = '<html>\n  <body>\n    <form action="' + htmlEscapeAttr(url) + '" method="GET">\n' +
+      // A GET <form> submission replaces the action URL's query string with
+      // the form's own fields — an action with no hidden inputs would submit
+      // to the bare path and silently drop every query param (this used to
+      // happen here). Parse the query string into hidden inputs instead, the
+      // same way Burp's "Generate CSRF PoC" does for GET-based vulnerabilities
+      // like DVWA's CSRF challenge (?password_new=...&password_conf=...).
+      var qIndex = url.indexOf('?');
+      var actionUrl = qIndex === -1 ? url : url.slice(0, qIndex);
+      var queryString = qIndex === -1 ? '' : url.slice(qIndex + 1);
+      var hashIndex = queryString.indexOf('#');
+      if (hashIndex !== -1) queryString = queryString.slice(0, hashIndex); // fragment is never sent to the server
+      var getInputs = '';
+      queryString.split('&').forEach(function (pair) {
+        if (!pair) return;
+        var eq = pair.indexOf('=');
+        var rawK = eq === -1 ? pair : pair.slice(0, eq);
+        var rawV = eq === -1 ? '' : pair.slice(eq + 1);
+        var k, v;
+        try { k = decodeURIComponent(rawK.replace(/\+/g, ' ')); } catch (e) { k = rawK; }
+        try { v = decodeURIComponent(rawV.replace(/\+/g, ' ')); } catch (e) { v = rawV; }
+        getInputs += '      <input type="hidden" name="' + htmlEscapeAttr(k) + '" value="' + htmlEscapeAttr(v) + '">\n';
+      });
+      html = '<html>\n  <body>\n    <form action="' + htmlEscapeAttr(actionUrl) + '" method="GET">\n' +
+             getInputs +
              '      <input type="submit" value="Submit request">\n    </form>\n' +
              '    <script>document.forms[0].submit();</script>\n  </body>\n</html>\n';
     } else if (ctype === 'application/x-www-form-urlencoded' || ctype === 'multipart/form-data') {
