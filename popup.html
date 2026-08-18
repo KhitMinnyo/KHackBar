@@ -277,7 +277,7 @@
     <circle cx="12" cy="12" r="3"/>
     <circle cx="12" cy="12" r="1" fill="#dc2626"/>
   </svg>
-  <h3>KHackBar v2.1 Pro</h3>
+  <h3>KHackBar v2.2 Pro</h3>
 </div>
 <div class="menu-bar">
   <div class="menu-item" id="menu_sql">BASIC</div>
@@ -601,6 +601,11 @@
       <input type="text" id="scope_input" class="settings-input" placeholder="In-Scope Target (e.g., example.com)">
       <button id="btn_save_scope" class="settings-btn">Save Scope</button>
     </div>
+    <label style="display:flex; align-items:center; gap:5px; font-size:10px; color:#ef4444; cursor:pointer; user-select:none; margin-top:6px;">
+      <input type="checkbox" id="scope_enabled_input" checked style="cursor:pointer;">
+      Enforce scope (block EXECUTE/POST/Fuzzer/Intruder requests outside the pattern above)
+    </label>
+    <div style="width:100%; font-size:9px; color:#a3a3a3; margin-top:3px;">Unchecking this does NOT clear the saved pattern — it just stops blocking, so you can flip it back on without retyping. Leave it on unless you have a specific reason to turn it off.</div>
   </div>
   <div class="settings-section">
     <div class="settings-section-title">Configuration</div>

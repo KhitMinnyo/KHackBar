@@ -1,8 +1,8 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.1 Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.2 Pro**
 
-> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.1** (Burp-style Intruder, fingerprint-driven SSTI, cookie editor, pure payloads, sqlmap export)
+> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.2** (security hardening, scope-enforcement toggle, POST → Tab, GET-aware CSRF PoC, first test suite)
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -49,6 +49,31 @@ Built-in encoding/decoding tools that transform the **selected text** in the URL
 - **HTML Entity** encode/decode
 - **Unicode** escape/unescape
 - **Reverse**
+
+---
+
+## 🆕 What's New in v2.2
+
+### 🚪 POST → Tab
+A new button next to **POST** submits the request as a real navigation in the active tab — the same self-submitting-form / credentialed-`fetch()` technique as the CSRF PoC generator — so redirects, session/cookie changes, and the resulting page are all actually visible instead of a silent background fetch. The original **POST** button is unchanged and still there for silent/background testing.
+
+### 🧰 Decluttered Fuzzer panel
+A **Fuzzer tool** dropdown at the top of the FUZZER tab now shows the URL Fuzzer or the Intruder one at a time (Intruder by default) instead of both stacked in the same scroll.
+
+### 🔒 Enforce scope toggle
+The Settings panel's Scope section gets a real on/off **Enforce scope** checkbox instead of enforcement being permanently implied by whatever pattern happens to be saved — so you can temporarily test an out-of-pattern target without deleting your saved scope config. Defaults to **on**, so upgrading never silently drops scope protection.
+
+### 🧪 First test suite
+A zero-dependency test suite (`node:test`, no external packages — run with `npm test`) now covers `scope.js`'s domain-matching logic and the Intruder's `§value§` marker parser (`parseMarked` / `fillTemplate`).
+
+### 🛡️ Security hardening
+- HTML-entity decoding switched from `innerHTML` to `DOMParser`, closing a path where decoding attacker-controlled text (e.g. a captured request) could execute script in the extension's privileged context.
+- POST auto-capture now honours its own **Auto-capture POST** toggle instead of writing to storage (and re-enabling itself) regardless of it.
+- Importing a settings JSON file now validates and sanitizes it (type checks + a `__proto__`/`constructor`/`prototype` guard) instead of merging it into storage directly.
+- Removed the unused `activeTab` permission (the standing `<all_urls>` host permission already covers everything it granted) and two dead, unreferenced objects from the payload library.
+
+### 🐛 Fixed: CSRF PoC for GET requests
+**Generate CSRF PoC** now correctly handles `GET`-based forms (e.g. DVWA's CSRF password-change challenge) by turning the URL's query string into hidden form fields, instead of silently dropping every query parameter the way a bare GET `<form>` submission otherwise would.
 
 ---
 
@@ -150,12 +175,13 @@ The new **Fuzzer** tab turns KHackBar into a powerful automated testing engine:
 - Click **Clear Results** to reset the output panel
 
 ### 🎯 Target Scoping & Safety
-Prevent accidental testing on unauthorized domains with the new **Scoping** feature:
+Prevent accidental testing on unauthorized domains with the **Scoping** feature:
 - Found under the **Settings** tab
-- Add allowed domains to your scope list (e.g., `*.example.com`)
-- Enable scoping to block requests to any domain not in your allowed list
+- Add allowed domains to your scope list (e.g., `*.example.com`) — leaving it blank means unrestricted (no domains blocked)
+- An **Enforce scope** checkbox blocks EXECUTE/POST/Fuzzer/Intruder requests to any domain outside your pattern — it's **on by default** once a pattern is saved, so it's really an off-switch for when you deliberately need it out of the way, not something you have to remember to enable
+- Turning enforcement off does **not** clear the saved pattern, so flipping it back on doesn't require retyping it
 - Adds a crucial safety layer during live engagements — no more embarrassing misfires on production systems
-- Scope rules are persisted via the `storage` API and survive browser restarts
+- Scope rules (and the enforcement toggle) are persisted via the `storage` API and survive browser restarts
 
 ### 💾 Configuration Management
 Backup and restore your entire KHackBar configuration with a single click:
@@ -214,10 +240,9 @@ Click the puzzle piece icon (Extensions menu) in the Chrome toolbar, find **KHac
 
 ### 🔒 Setting Up Scope (Before Starting a Pentest)
 1. Open the **Settings** tab in the KHackBar side panel.
-2. In the **Target Scope** section, add domains you are authorized to test (e.g., `*.example.com` or `https://testsite.local/*`).
-3. Toggle scoping **ON** to activate the restriction.
-4. Any request to a domain **not** in your scope list will be blocked — keeping your testing safe and compliant.
-5. Scope rules are automatically saved and will persist across browser sessions.
+2. In the **Target Scope** section, add domains you are authorized to test (e.g., `*.example.com` or `https://testsite.local/*`) and click **Save Scope**.
+3. Make sure **Enforce scope** stays checked (it's on by default) — any request to a domain **not** in your scope list will be blocked while it's on, keeping your testing safe and compliant.
+4. Scope rules and the enforcement toggle are automatically saved and persist across browser sessions.
 
 ### 🔁 Using the Fuzzer with `FUZZ` / `[FUZZ]` Syntax
 1. Navigate to the **Fuzzer** tab.
@@ -244,12 +269,12 @@ Click the puzzle piece icon (Extensions menu) in the Chrome toolbar, find **KHac
 |-------------|---------|
 | **Browser** | Google Chrome (v88+ recommended) |
 | **Manifest** | Manifest V3 |
-| **Permissions** | `tabs`, `activeTab`, `scripting`, `sidePanel`, `storage`, `cookies`, `declarativeNetRequest`, `contextMenus`, `webRequest` |
+| **Permissions** | `tabs`, `scripting`, `sidePanel`, `storage`, `cookies`, `declarativeNetRequest`, `contextMenus`, `webRequest` |
 | **Permissions** | `sidePanel` — to operate within Chrome's Side Panel UI |
 | **Permissions** | `storage` — for persisting scope rules, headers, and configuration data |
 | **Permissions** | `contextMenus` — for right-click context menu integration |
 | **Permissions** | `webRequest` — read-only observation used by POST Capture (non-blocking; never modifies traffic) |
-| **Host Access** | `<all_urls>` — required for payload injection and network request modification |
+| **Host Access** | `<all_urls>` — required for payload injection and network request modification (this standing grant is broader than `activeTab`, which is why the manifest doesn't request `activeTab` separately) |
 
 ---
 

@@ -277,6 +277,51 @@ window.KHackBar.Fuzzer.init = function (opts) {
 //                  tried (cartesian product).
 //                  total requests = len(set1) × len(set2) × ...
 // ============================================================
+
+// ---- §value§ marker parsing ----
+// Hoisted out of initIntruder's closure (rather than defined inside it) so
+// it's a pure, standalone-testable unit: string in -> {template, bases} out,
+// template + values -> string out — no DOM, no chrome.* APIs involved.
+// initIntruder below calls these exact same functions (JS closures resolve
+// them from this enclosing scope); they're also exposed on the namespace so
+// tests can exercise them directly without going through the UI.
+var MARKER = '§';   // Burp-style position marker
+var TOK_A = '', TOK_B = ''; // private-use placeholder delimiters
+
+// startIdx lets URL / body / Cookie header share one continuous position
+// index space, so a single payload vector can drive all three at once.
+function parseMarked(text, startIdx) {
+  var bases = [];
+  var out = '';
+  var i = 0, idx = startIdx;
+  while (i < text.length) {
+    if (text.charAt(i) === MARKER) {
+      var end = text.indexOf(MARKER, i + 1);
+      if (end === -1) { out += text.slice(i); break; } // unmatched → literal
+      bases.push(text.slice(i + 1, end));
+      out += TOK_A + idx + TOK_B;
+      idx++;
+      i = end + 1;
+    } else {
+      out += text.charAt(i);
+      i++;
+    }
+  }
+  return { template: out, bases: bases, next: idx };
+}
+
+function fillTemplate(template, rendered) {
+  var re = new RegExp(TOK_A + '(\\d+)' + TOK_B, 'g');
+  return template.replace(re, function (_, n) {
+    var v = rendered[parseInt(n, 10)];
+    return v == null ? '' : v;
+  });
+}
+
+window.KHackBar.Fuzzer.MARKER = MARKER;
+window.KHackBar.Fuzzer.parseMarked = parseMarked;
+window.KHackBar.Fuzzer.fillTemplate = fillTemplate;
+
 window.KHackBar.Fuzzer.initIntruder = function (opts) {
   var attackTypeEl = opts.attackType;      // <select> sniper | cluster
   var methodEl     = opts.method;          // <select> GET | POST
@@ -317,8 +362,9 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
   if (!attackTypeEl || !urlEl || !bodyEl || !btnStart || !setsWrap) return;
 
   var MAX_REQUESTS = 5000; // safety cap to avoid runaway combinatorial blasts
-  var MARKER = '§';   // §
-  var TOK_A = '', TOK_B = ''; // private-use placeholder delimiters
+  // MARKER, TOK_A/TOK_B, parseMarked() and fillTemplate() now live above,
+  // outside this closure (see the comment there) - resolved here via normal
+  // JS closure scoping, same behavior as before.
 
   var payloadInputs = []; // textareas currently rendered in setsWrap
   var abortController = null;
@@ -330,28 +376,6 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
   urlEl.addEventListener('focus', function () { lastFocused = urlEl; });
   bodyEl.addEventListener('focus', function () { lastFocused = bodyEl; });
   if (cookieEl) cookieEl.addEventListener('focus', function () { lastFocused = cookieEl; });
-
-  // ---- Parse §value§ markers into a template + list of base values ----
-  // startIdx lets URL and body share one continuous position index space.
-  function parseMarked(text, startIdx) {
-    var bases = [];
-    var out = '';
-    var i = 0, idx = startIdx;
-    while (i < text.length) {
-      if (text.charAt(i) === MARKER) {
-        var end = text.indexOf(MARKER, i + 1);
-        if (end === -1) { out += text.slice(i); break; } // unmatched → literal
-        bases.push(text.slice(i + 1, end));
-        out += TOK_A + idx + TOK_B;
-        idx++;
-        i = end + 1;
-      } else {
-        out += text.charAt(i);
-        i++;
-      }
-    }
-    return { template: out, bases: bases, next: idx };
-  }
 
   // Combine URL positions (always), body positions (POST only) and Cookie
   // positions (whenever a Cookie header is supplied) into one shared index
@@ -385,14 +409,6 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
       bases: bases,
       count: bases.length
     };
-  }
-
-  function fillTemplate(template, rendered) {
-    var re = new RegExp(TOK_A + '(\\d+)' + TOK_B, 'g');
-    return template.replace(re, function (_, n) {
-      var v = rendered[parseInt(n, 10)];
-      return v == null ? '' : v;
-    });
   }
 
   function encPayload(p) {

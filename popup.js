@@ -274,7 +274,8 @@ document.addEventListener('DOMContentLoaded', function () {
           contentType: ct
         }, function (response) {
           if (response && response.success) {
-            setStatus('[+] POST response received (' + response.status + ').');
+            var lengthNote = (typeof response.length === 'number') ? (', ' + response.length + ' bytes') : '';
+            setStatus('[+] POST response received (' + response.status + lengthNote + ').');
           } else if (response && response.error) {
             setStatus('[!] POST error: ' + response.error);
           }
@@ -419,12 +420,18 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
 
-    // Auto-enable capture whenever the panel opens, so logging in on the active
-    // tab is captured automatically — no need to hunt for a toggle. The user can
-    // still switch it off manually; that choice lasts until the panel is reopened.
-    chrome.storage.local.get(['last_captured_post'], function (result) {
-      chkCapturePost.checked = true;
-      chrome.runtime.sendMessage({ type: 'set_capture_post_enabled', enabled: true }, function () {
+    // Restore the user's last explicit choice instead of forcing capture back
+    // on every time the panel opens — auto-re-enabling silently defeated
+    // turning it off (unchecking it wouldn't stick past a panel reopen, and
+    // capture-content.js/capture-main.js run on every site regardless, so
+    // this flag is the only thing standing between "off" and every POST body
+    // on every page getting captured). Fresh installs (never toggled before)
+    // default to OFF: capturing credentials from unrelated sites should be
+    // opt-in, not opt-out.
+    chrome.storage.local.get(['last_captured_post', 'capture_post_enabled'], function (result) {
+      var enabled = !!result.capture_post_enabled;
+      chkCapturePost.checked = enabled;
+      chrome.runtime.sendMessage({ type: 'set_capture_post_enabled', enabled: enabled }, function () {
         void chrome.runtime.lastError;
       });
       if (result.last_captured_post) {
@@ -746,6 +753,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ============================================================
   var settingsApi = KHackBar.Settings.init({
     scopeInput: document.getElementById('scope_input'),
+    scopeEnabledInput: document.getElementById('scope_enabled_input'),
     btnSaveScope: document.getElementById('btn_save_scope'),
     btnExportConfig: document.getElementById('btn_export_config'),
     importConfigFile: document.getElementById('import_config_file'),
@@ -781,7 +789,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ============================================================
   var headerTitle = document.querySelector('.header h3');
   if (headerTitle) {
-    headerTitle.textContent = 'KHackBar v2.1 Pro';
+    headerTitle.textContent = 'KHackBar v2.2 Pro';
   }
 
   // Initial status

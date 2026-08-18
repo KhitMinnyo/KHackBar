@@ -32,6 +32,7 @@ if (!window.KHackBar.Audit) {
  */
 window.KHackBar.Settings.init = function (opts) {
   var scopeInput = opts.scopeInput;
+  var scopeEnabledInput = opts.scopeEnabledInput;
   var btnSaveScope = opts.btnSaveScope;
   var btnExportConfig = opts.btnExportConfig;
   var importConfigFile = opts.importConfigFile;
@@ -42,19 +43,39 @@ window.KHackBar.Settings.init = function (opts) {
   var logAudit = opts.logAudit || function () {};
 
   // ---- Load saved scope ----
-  window.KHackBar.Scope.getSavedScope(function (scope) {
-    if (scopeInput) scopeInput.value = scope;
+  // Read storage directly rather than via Scope.getSavedScope(): that getter
+  // returns '' when enforcement is off (the right behavior for callers
+  // deciding whether to allow a request), but here we're populating the
+  // settings UI itself, so we need the real saved pattern + toggle state to
+  // display, not the "effective" value.
+  chrome.storage.local.get(['scope_pattern', 'scope_enabled'], function (result) {
+    if (scopeInput) scopeInput.value = result.scope_pattern || '';
+    if (scopeEnabledInput) scopeEnabledInput.checked = result.scope_enabled !== false;
   });
 
-  // ---- Save Scope ----
-  if (btnSaveScope && scopeInput) {
-    btnSaveScope.onclick = function () {
-      var pattern = scopeInput.value.trim();
-      window.KHackBar.Scope.saveScope(pattern, function () {
-        window.KHackBar.UI.setText(status, '[+] Scope saved: ' + (pattern || '(none)'));
-        logAudit('scope_save', pattern, 'Scope pattern updated');
+  // ---- Save Scope (pattern + enforcement toggle together) ----
+  function saveScopeState(announce) {
+    var pattern = scopeInput ? scopeInput.value.trim() : '';
+    var enabled = scopeEnabledInput ? scopeEnabledInput.checked : true;
+    window.KHackBar.Scope.saveScope(pattern, function () {
+      window.KHackBar.Scope.saveScopeEnabled(enabled, function () {
+        if (!announce) return;
+        var msg = enabled
+          ? '[+] Scope saved: ' + (pattern || '(none — unrestricted)')
+          : '[!] Scope saved but enforcement is OFF — requests are NOT being blocked.';
+        window.KHackBar.UI.setText(status, msg);
+        logAudit('scope_save', pattern, 'Scope pattern updated, enforcement ' + (enabled ? 'ON' : 'OFF'));
       });
-    };
+    });
+  }
+
+  if (btnSaveScope && scopeInput) {
+    btnSaveScope.onclick = function () { saveScopeState(true); };
+  }
+  // The enforcement toggle saves itself immediately on change — a safety
+  // control like this shouldn't depend on remembering to also click Save.
+  if (scopeEnabledInput) {
+    scopeEnabledInput.onchange = function () { saveScopeState(true); };
   }
 
   // ---- Export Config ----
@@ -80,6 +101,42 @@ window.KHackBar.Settings.init = function (opts) {
   }
 
   // ---- Import Config ----
+  // A basic schema so a malformed or malicious "shared config" file (the
+  // README's own "share configs across your red team" workflow is exactly
+  // how one of these could reach someone) can't silently corrupt settings.
+  // Known keys are type-checked and dropped individually (not the whole
+  // import) if they don't match; unknown keys pass through so this doesn't
+  // need updating every time a new setting is added elsewhere.
+  var CONFIG_KEY_VALIDATORS = {
+    scope_pattern: function (v) { return typeof v === 'string'; },
+    scope_enabled: function (v) { return typeof v === 'boolean'; },
+    capture_post_enabled: function (v) { return typeof v === 'boolean'; },
+    header_url_pattern: function (v) { return typeof v === 'string'; },
+    custom_headers: function (v) {
+      return Array.isArray(v) && v.every(function (h) {
+        return h && typeof h === 'object' && typeof h.header === 'string' && typeof h.value === 'string';
+      });
+    },
+    audit_logs: function (v) { return Array.isArray(v); },
+    last_captured_post: function (v) {
+      return v && typeof v === 'object' && typeof v.url === 'string' && typeof v.body === 'string';
+    }
+  };
+  // Never let an imported key shadow Object.prototype internals.
+  var DANGEROUS_KEYS = { '__proto__': true, 'constructor': true, 'prototype': true };
+
+  function sanitizeImportedData(data) {
+    var clean = {};
+    var skipped = [];
+    Object.keys(data).forEach(function (key) {
+      if (DANGEROUS_KEYS[key]) { skipped.push(key + ' (unsafe key name)'); return; }
+      var validate = CONFIG_KEY_VALIDATORS[key];
+      if (validate && !validate(data[key])) { skipped.push(key + ' (wrong type/shape)'); return; }
+      clean[key] = data[key];
+    });
+    return { clean: clean, skipped: skipped };
+  }
+
   if (btnImportConfig && importConfigFile) {
     btnImportConfig.onclick = function () {
       importConfigFile.click();
@@ -92,16 +149,30 @@ window.KHackBar.Settings.init = function (opts) {
       reader.onload = function (ev) {
         try {
           var config = JSON.parse(ev.target.result);
-          if (config && config.data) {
-            chrome.storage.local.set(config.data, function () {
-              window.KHackBar.UI.setText(status, '[+] Config imported successfully. Reloading...');
-              logAudit('config_import', '', 'Configuration imported');
-              // Reload the popup to apply settings
-              setTimeout(function () { location.reload(); }, window.KHackBar.Config.CONFIG_RELOAD_DELAY);
-            });
-          } else {
+          var isPlainObject = config && typeof config === 'object' && !Array.isArray(config);
+          var dataIsPlainObject = isPlainObject && config.data && typeof config.data === 'object' && !Array.isArray(config.data);
+          if (!dataIsPlainObject) {
             window.KHackBar.UI.setText(status, '[!] Invalid config file format.');
+            return;
           }
+
+          var result = sanitizeImportedData(config.data);
+          if (Object.keys(result.clean).length === 0) {
+            window.KHackBar.UI.setText(status, '[!] Config file had no valid, recognized settings to import.');
+            return;
+          }
+
+          chrome.storage.local.set(result.clean, function () {
+            var msg = '[+] Config imported successfully.';
+            if (result.skipped.length > 0) {
+              msg += ' Skipped ' + result.skipped.length + ' invalid field(s): ' + result.skipped.join(', ') + '.';
+            }
+            msg += ' Reloading...';
+            window.KHackBar.UI.setText(status, msg);
+            logAudit('config_import', '', 'Configuration imported' + (result.skipped.length ? (' (skipped: ' + result.skipped.join(', ') + ')') : ''));
+            // Reload the popup to apply settings
+            setTimeout(function () { location.reload(); }, window.KHackBar.Config.CONFIG_RELOAD_DELAY);
+          });
         } catch (err) {
           window.KHackBar.UI.setText(status, '[!] Error importing config: ' + err.message);
         }

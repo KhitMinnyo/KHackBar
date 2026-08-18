@@ -176,15 +176,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       reconstructed: false,
       timeStamp: d.timeStamp || Date.now()
     };
-    // Always store the latest capture so "Load captured POST" works regardless
-    // of the toggle state. The toggle only gates the live auto-fill push below.
-    chrome.storage.local.set({ last_captured_post: captured });
+    // PRIVACY: only persist/relay this if capture is actually enabled. This
+    // content script observes every POST on every page (that's what makes it
+    // reliable — see the note above), so without this gate every login body
+    // on every site the user visits — including ones with nothing to do with
+    // KHackBar — would end up sitting in extension storage indefinitely.
+    // (Previously the storage write ran unconditionally and only the live
+    // push was gated; that meant unchecking "Auto-capture" didn't actually
+    // stop credentials from being stored, just from being auto-filled.)
     chrome.storage.local.get(['capture_post_enabled'], (res) => {
-      if (res && res.capture_post_enabled) {
-        chrome.runtime.sendMessage({ type: 'post_captured', data: captured }, () => {
-          void chrome.runtime.lastError;
-        });
-      }
+      if (!res || !res.capture_post_enabled) return;
+      chrome.storage.local.set({ last_captured_post: captured });
+      chrome.runtime.sendMessage({ type: 'post_captured', data: captured }, () => {
+        void chrome.runtime.lastError;
+      });
     });
     return false;
   }

@@ -186,9 +186,23 @@ window.KHackBar.UI.encoder = {
         .replace(/'/g, '&#39;');
     },
     decode: function (str) {
-      const div = document.createElement('div');
-      div.innerHTML = str;
-      return div.textContent || div.innerText || '';
+      // SECURITY: do not use `div.innerHTML = str` here. Even on a div that
+      // is never attached to the document, the HTML parser still creates and
+      // processes real elements — an <img src=x onerror="..."> (or <svg
+      // onload=...>) begins loading and can fire its handler without ever
+      // being inserted into the page. Since this code runs in the side
+      // panel's own extension context, any script that ran that way would
+      // have this extension's full privileges (chrome.cookies, chrome.
+      // storage, chrome.tabs, ...) — and this decoder is routinely fed
+      // attacker-influenced text (a response body copied in to inspect).
+      // DOMParser-created documents are inert by spec: no scripts execute,
+      // no images/resources load, nothing renders. Safe for untrusted input.
+      try {
+        var doc = new DOMParser().parseFromString(String(str), 'text/html');
+        return doc.documentElement.textContent || '';
+      } catch (e) {
+        return str;
+      }
     }
   },
   durl: {

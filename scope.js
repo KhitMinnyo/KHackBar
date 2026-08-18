@@ -99,12 +99,22 @@ window.KHackBar.Scope.checkScope = function (targetUrl, scopePattern) {
 }
 
 /**
- * Get the saved scope from chrome.storage.local.
- * @param {function} callback - Called with the scope string
+ * Get the saved scope from chrome.storage.local. When scope enforcement has
+ * been explicitly turned off (scope_enabled === false), this returns '' —
+ * the same "no pattern" value checkScope already treats as allow-everything
+ * — regardless of what pattern is stored, so every existing caller (EXECUTE,
+ * POST, Fuzzer, Intruder) automatically honours the toggle with no changes
+ * on their end. The saved pattern text itself is left untouched, so turning
+ * enforcement back on doesn't require retyping it.
+ *
+ * scope_enabled defaults to true when unset, so upgrading from a version
+ * without this toggle does not silently drop existing scope protection.
+ * @param {function} callback - Called with the effective scope string
  */
 window.KHackBar.Scope.getSavedScope = function (callback) {
-  chrome.storage.local.get(['scope_pattern'], function (result) {
-    callback(result.scope_pattern || '');
+  chrome.storage.local.get(['scope_pattern', 'scope_enabled'], function (result) {
+    var enabled = result.scope_enabled !== false;
+    callback(enabled ? (result.scope_pattern || '') : '');
   });
 }
 
@@ -115,4 +125,23 @@ window.KHackBar.Scope.getSavedScope = function (callback) {
  */
 window.KHackBar.Scope.saveScope = function (pattern, callback) {
   chrome.storage.local.set({ scope_pattern: pattern }, callback || function () {});
+};
+
+/**
+ * Get whether scope enforcement is enabled (defaults to true when unset).
+ * @param {function} callback - Called with a boolean
+ */
+window.KHackBar.Scope.getScopeEnabled = function (callback) {
+  chrome.storage.local.get(['scope_enabled'], function (result) {
+    callback(result.scope_enabled !== false);
+  });
+};
+
+/**
+ * Save whether scope enforcement is enabled.
+ * @param {boolean} enabled
+ * @param {function} [callback]
+ */
+window.KHackBar.Scope.saveScopeEnabled = function (enabled, callback) {
+  chrome.storage.local.set({ scope_enabled: !!enabled }, callback || function () {});
 };

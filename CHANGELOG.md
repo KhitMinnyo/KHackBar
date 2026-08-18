@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [2.2] — 2026-08-18
+
+A hardening and cleanup release: fixes a privileged-context XSS risk, an
+unconditional POST-capture privacy leak, and a settings-import
+prototype-pollution gap; adds a real scope-enforcement on/off toggle and the
+project's first test suite; trims an unused permission and dead code — plus
+POST → Tab navigation, a GET-aware CSRF PoC generator, and a decluttered
+Fuzzer panel.
 
 ### Added
 - **POST → Tab.** A new button next to **POST** submits the request as a real
@@ -20,6 +27,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **FUZZER panel mode switch.** The URL Fuzzer and Intruder no longer sit
   stacked in the same scroll — a **Fuzzer tool** dropdown at the top of the
   FUZZER tab shows one at a time (Intruder by default).
+- **Enforce scope toggle.** The Settings panel's Scope section gets a real
+  on/off checkbox (**Enforce scope**) instead of enforcement being
+  permanently implied by whatever pattern happens to be saved. `getSavedScope`
+  now returns `''` (allow-all) whenever enforcement is off, so every existing
+  caller — EXECUTE, POST, Fuzzer, Intruder — honours the toggle automatically.
+  Defaults to **on** when unset, so upgrading from an earlier version never
+  silently drops scope protection, and the saved pattern text is left
+  untouched when you turn enforcement off, so switching it back on later
+  doesn't require retyping it.
+
+### Added — tooling
+- **First test suite.** A zero-dependency suite (`node:test`, no external
+  packages — run with `npm test`) covering `scope.js`'s `checkScope` domain
+  matching (exact host, `*.domain` wildcard, the `evil-example.com` vs
+  `example.com` subdomain-boundary case, case-insensitivity, URL-form
+  patterns, invalid target URLs) and `fuzzer.js`'s `§value§` marker parser
+  (`parseMarked` / `fillTemplate`): multi-position parsing, the shared
+  URL/body/cookie index space, unmatched-marker fallback to literal text, and
+  round-trip reconstruction. `parseMarked`/`fillTemplate` were hoisted out of
+  `initIntruder`'s closure to module scope and exposed on
+  `window.KHackBar.Fuzzer` to make this possible, with no behavior change —
+  `initIntruder` resolves the identical functions via normal closure scoping.
+
+### Changed
+- **POST status now shows response length**, matching Fuzzer/Intruder results
+  (`[+] POST response received (200, 1234 bytes).`) instead of status alone.
+
+### Removed
+- **Dead code.** Dropped two unused, unreferenced objects from `payloads.js`
+  (`extractionHandlers`, `promptLogic`) and their exports — confirmed dead via
+  a full-codebase reference search.
+- **Unused `activeTab` permission.** The manifest's standing
+  `host_permissions: ["<all_urls>"]` already covers every
+  `chrome.scripting.executeScript` call the extension makes, so `activeTab`
+  added nothing but review-surface noise. README's permissions table updated
+  to match.
 
 ### Fixed
 - **Generate CSRF PoC dropped every query param for GET requests.** The GET
@@ -29,6 +72,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   challenge, `?password_new=...&password_conf=...`) instead of reproducing
   the request. Query params are now parsed into hidden inputs, same as the
   POST branch does for the body.
+
+### Security / Safety
+- **HTML-entity decoding could execute attacker HTML in the extension's
+  privileged context.** The decoder used `div.innerHTML = str` on a `<div>`
+  that was never attached to the document — but Chromium still loads/runs
+  `<img src=x onerror=...>`-style handlers on detached nodes, so decoding
+  attacker-controlled text (e.g. a captured request) could execute script with
+  the extension's full permissions. Replaced with
+  `DOMParser().parseFromString(str, 'text/html')`, which decodes entities
+  without executing scripts or loading any resources.
+- **POST auto-capture wrote to storage even while its own toggle was off.**
+  The capture handler's `chrome.storage.local.set` call (and the relay to the
+  open panel) ran unconditionally, so a request's URL/body/cookies could be
+  persisted regardless of the *Auto-capture POST* checkbox — and the checkbox
+  itself was silently forced back **on** every time the panel was reopened.
+  Both the storage write and the relay now re-check `capture_post_enabled`
+  first, and the checkbox reads (and respects) its saved state instead of
+  overriding it.
+- **Settings import had no shape validation or prototype-pollution guard.**
+  Importing a settings JSON file merged it into `chrome.storage.local`
+  directly, so a crafted file could plant unexpected keys — including
+  `__proto__` / `constructor` / `prototype`, a prototype-pollution vector.
+  Added per-key type validation and a dangerous-key guard; import now strips
+  invalid or dangerous entries individually (reporting which ones) instead of
+  trusting the file wholesale, and aborts cleanly if nothing valid remains.
 
 ---
 
@@ -220,6 +288,7 @@ and a **Copy as sqlmap** export.
   execution, encoders/decoders, scope enforcement, and audit logging — all in a
   side-panel, Red Team-themed UI on Manifest V3.
 
+[2.2]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.2
 [2.1]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.1
 [1.8]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v1.8
 [1.3]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v1.3

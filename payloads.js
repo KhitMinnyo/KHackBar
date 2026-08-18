@@ -787,55 +787,8 @@ const fuzzerPresets = [
   { id: 'blind', label: 'Blind SQLi', list: predatorData.blind }
 ];
 
-// ---- Extraction Handlers (for data extraction view) ----
-const extractionHandlers = {
-  default: function(text) { return text; },
-  regex: function(text, pattern) {
-    try {
-      const regex = new RegExp(pattern, 'gi');
-      const matches = text.match(regex);
-      return matches ? matches.join('\n') : 'No matches found.';
-    } catch (e) {
-      return 'Regex error: ' + e.message;
-    }
-  },
-  json: function(text) {
-    try {
-      return JSON.stringify(JSON.parse(text), null, 2);
-    } catch (e) {
-      return 'Invalid JSON: ' + e.message;
-    }
-  },
-  hex: function(text) {
-    return text.split('').map(function(c) {
-      return '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0');
-    }).join('');
-  }
-};
-
-// ---- Prompt Logic (for display/UI helpers) ----
-const promptLogic = {
-  getCategory: function(id) {
-    const map = {
-      sql: 'SQL Injection', union: 'UNION Based', wafunion: 'WAF UNION',
-      waf: 'WAF Bypass', mysqldios: 'MySQL DIOS', postgredios: 'PostgreSQL DIOS',
-      localdios: 'Local File DIOS', mssql: 'MsSQL Injection', error: 'Error Based',
-      xss: 'XSS Injection', lfi: 'Local File Inclusion', nosql: 'NoSQL Injection',
-      ssrf: 'SSRF', ssrf_rce: 'SSRF + RCE', ssti: 'SSTI',
-      blind: 'Blind SQLi', replace: 'Replace', osci: 'OS Command Injection'
-    };
-    return map[id] || id;
-  },
-
-  getPayloadCount: function(category) {
-    return predatorData[category] ? predatorData[category].length : 0;
-  }
-};
-
 // ---- Expose to namespace ----
 window.KHackBar.Payloads.predatorData = predatorData;
-window.KHackBar.Payloads.extractionHandlers = extractionHandlers;
-window.KHackBar.Payloads.promptLogic = promptLogic;
 window.KHackBar.Payloads.wafTemplates = wafTemplates;
 window.KHackBar.Payloads.wafTransforms = wafTransforms;
 window.KHackBar.Payloads.wafOneShot = wafOneShot;
