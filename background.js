@@ -339,7 +339,7 @@ async function runIntruderRequest(message) {
     // them instead of marking the request permanently failed. A real HTTP
     // response (any status, even 500) is returned immediately without retry;
     // a genuine timeout (AbortError) is also not retried.
-    const MAX_ATTEMPTS = 4;
+    const MAX_ATTEMPTS = 6;
     let lastErr = null;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       const controller = new AbortController();
@@ -367,9 +367,15 @@ async function runIntruderRequest(message) {
           return { success: false, aborted: true, error: 'Timed out after ' + timeoutMs + 'ms' };
         }
         lastErr = err;
-        // Back off and retry on transient network errors only.
+        // Exponential backoff with jitter. A burst of concurrent requests can
+        // trip a target's rate-limit / connection cap (classic on PortSwigger
+        // labs), and that cooldown can last a few seconds — a short fixed delay
+        // isn't enough. Growing waits (≈0.25s→0.5s→1s→2s→4s, capped at 5s) plus
+        // jitter spread the retries out so the workers stop re-bursting in
+        // lockstep and the requests drain through.
         if (attempt < MAX_ATTEMPTS) {
-          const backoff = 150 * attempt + Math.floor(Math.random() * 100); // 150/300/450ms + jitter
+          const base = Math.min(5000, 250 * Math.pow(2, attempt - 1));
+          const backoff = base + Math.floor(Math.random() * 250);
           await new Promise(r => setTimeout(r, backoff));
         }
       }

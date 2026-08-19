@@ -551,11 +551,11 @@
   <div style="display:flex; align-items:center; gap:12px; width:100%; margin-bottom:6px; flex-wrap:wrap;">
     <label style="display:flex; align-items:center; gap:4px; font-size:10px; color:#ef4444;">
       Threads
-      <input type="number" id="intruder_threads" value="10" min="1" max="50" title="Parallel requests in flight (like Burp's resource pool)" style="width:52px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:3px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+      <input type="number" id="intruder_threads" value="5" min="1" max="50" title="Parallel requests in flight (like Burp's resource pool). Lower = gentler on rate-limited targets like PortSwigger labs (try 1-3 if you see 'Failed to fetch')." style="width:52px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:3px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
     </label>
     <label style="display:flex; align-items:center; gap:4px; font-size:10px; color:#ef4444;">
       Delay (ms)
-      <input type="number" id="intruder_delay" value="0" min="0" max="60000" title="Optional pause after each request per thread (0 = fastest)" style="width:64px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:3px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+      <input type="number" id="intruder_delay" value="25" min="0" max="60000" title="Pause after each request per thread (0 = fastest). A small delay (25-150ms) avoids tripping rate limits on lab targets." style="width:64px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:3px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
     </label>
   </div>
 
