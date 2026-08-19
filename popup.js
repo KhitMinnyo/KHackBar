@@ -88,16 +88,38 @@ document.addEventListener('DOMContentLoaded', function () {
   // ============================================================
   // 2. Encoding buttons
   // ============================================================
-  // Each encoder/decoder now works on the SELECTED text in the URL box, so you
-  // can transform just a payload (e.g. Unicode-escape only the injection string)
-  // instead of mangling the whole URL. The transformed text stays selected, so
-  // clicking the matching D-* button decodes it straight back. With nothing
-  // selected it falls back to the whole box (the old behaviour).
+  // Each encoder/decoder works on the SELECTED text in whichever editable field
+  // you were last typing/selecting in — the URL box, the POST box, or any of the
+  // Intruder fields (URL / request body / cookie). This lets you transform just a
+  // payload (e.g. URL-decode only the captured POST value) instead of mangling the
+  // whole field. The transformed text stays selected, so clicking the matching
+  // D-* button decodes it straight back. With nothing selected it falls back to
+  // the whole field (the old behaviour).
+  //
+  // We track the last-focused field because clicking an encode button moves focus
+  // to the button itself, so document.activeElement is no longer the textarea by
+  // the time the click handler runs.
+  var lastEditField = urlBox;
+  function isEditableField(el) {
+    if (!el) return false;
+    if (el.tagName === 'TEXTAREA') return !el.readOnly && !el.disabled;
+    if (el.tagName === 'INPUT') {
+      var t = (el.type || 'text').toLowerCase();
+      return (t === 'text' || t === 'search' || t === 'url') && !el.readOnly && !el.disabled;
+    }
+    return false;
+  }
+  document.addEventListener('focusin', function (e) {
+    if (isEditableField(e.target)) lastEditField = e.target;
+  });
+
   function applyEnc(fn, label) {
-    var appliedToSelection = KHackBar.UI.transformSelection(urlBox, fn);
+    var field = isEditableField(lastEditField) ? lastEditField : urlBox;
+    var name = field === urlBox ? 'URL box' : 'field';
+    var appliedToSelection = KHackBar.UI.transformSelection(field, fn);
     if (!appliedToSelection) {
-      urlBox.value = fn(urlBox.value);
-      setStatus('[+] ' + label + ' applied to the whole URL box (select text first to target just a payload).');
+      field.value = fn(field.value);
+      setStatus('[+] ' + label + ' applied to the whole ' + name + ' (select text first to target just a payload).');
     } else {
       setStatus('[+] ' + label + ' applied to selection.');
     }
