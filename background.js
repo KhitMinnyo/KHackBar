@@ -332,31 +332,53 @@ async function runIntruderRequest(message) {
       ruleInstalled = true;
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const init = { method: method, signal: controller.signal };
-    if (method !== 'GET' && method !== 'HEAD') {
-      init.headers = { 'Content-Type': message.contentType || 'application/x-www-form-urlencoded' };
-      init.body = message.data != null ? message.data : '';
-    }
-
-    try {
-      const response = await fetch(message.url, init);
-      clearTimeout(timeoutId);
-      const responseText = await response.text();
-      return {
-        success: true,
-        status: response.status,
-        statusText: response.statusText,
-        length: responseText.length
-      };
-    } catch (err) {
-      clearTimeout(timeoutId);
-      if (err.name === 'AbortError') {
-        return { success: false, aborted: true, error: 'Timed out after ' + timeoutMs + 'ms' };
+    // Retry transient network failures. Under rapid concurrent fire (e.g. an
+    // Intruder run with many threads), targets like the PortSwigger labs reset
+    // or refuse connections, which surfaces as a "Failed to fetch" TypeError.
+    // These are not real HTTP responses — a short backoff and retry recovers
+    // them instead of marking the request permanently failed. A real HTTP
+    // response (any status, even 500) is returned immediately without retry;
+    // a genuine timeout (AbortError) is also not retried.
+    const MAX_ATTEMPTS = 4;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const init = { method: method, signal: controller.signal };
+      if (method !== 'GET' && method !== 'HEAD') {
+        init.headers = { 'Content-Type': message.contentType || 'application/x-www-form-urlencoded' };
+        init.body = message.data != null ? message.data : '';
       }
-      return { success: false, error: err.message };
+
+      try {
+        const response = await fetch(message.url, init);
+        clearTimeout(timeoutId);
+        const responseText = await response.text();
+        return {
+          success: true,
+          status: response.status,
+          statusText: response.statusText,
+          length: responseText.length,
+          retries: attempt - 1
+        };
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+          return { success: false, aborted: true, error: 'Timed out after ' + timeoutMs + 'ms' };
+        }
+        lastErr = err;
+        // Back off and retry on transient network errors only.
+        if (attempt < MAX_ATTEMPTS) {
+          const backoff = 150 * attempt + Math.floor(Math.random() * 100); // 150/300/450ms + jitter
+          await new Promise(r => setTimeout(r, backoff));
+        }
+      }
     }
+    return {
+      success: false,
+      error: (lastErr && lastErr.message ? lastErr.message : 'Network error') +
+             ' (after ' + MAX_ATTEMPTS + ' attempts — try lowering Threads or raising Delay if this persists)'
+    };
   } finally {
     if (ruleInstalled) {
       try {
