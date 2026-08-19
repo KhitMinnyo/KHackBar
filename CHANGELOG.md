@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3] — 2026-08-19
+
+A Fuzzer/Intruder usability release: two new ways to build payload sets
+(numeric ranges and wordlist files), reliability against rate-limited targets,
+directional result sorting, encoders that follow your cursor, and clearer
+controls.
+
+### Added
+- **Numbers payload generator (Intruder).** Every payload set now has a
+  Burp-style **Numbers** row — `from → to  step` with a **Generate** button
+  that fills the box with the numeric sequence, one per line. Counts up or down
+  and supports decimal steps; capped at 10,000 numbers to keep the UI
+  responsive. Ideal for ID/IP sweeps (e.g. `1 → 255` for an SSRF back-end
+  scan).
+- **Load wordlist from file (Intruder).** A **📁 Load file** button on each
+  payload set reads a local wordlist (`.txt`, `.lst`, SecLists, rockyou-style,
+  etc.) entirely client-side via `FileReader` — nothing is uploaded — and drops
+  each non-empty line into the box. Strips a UTF-8 BOM, blank lines, and
+  trailing whitespace; capped at 20 MB / 200,000 lines with a visible count.
+- **Clear list button (Intruder).** A **✕ Clear list** button on each payload
+  set empties just that payload box (positions, URL, and body are kept), so a
+  pasted or loaded list can be swapped without hand-deleting it.
+
+### Changed
+- **Result sorting now toggles ascending/descending.** Clicking **Sort by
+  length** or **Sort by status** again reverses the direction (a status line
+  shows `↑ ascending` / `↓ descending`). Previously sorting was
+  descending-only, which buried *shorter* outliers (a short error/redirect that
+  marks the interesting response) at the bottom off-screen — making sort look
+  like it "did nothing". Ties fall back to original request order for
+  stability.
+- **Encoders/decoders act on the last-focused field.** The URL/Hex/Base64/
+  HTML/Unicode encode & decode buttons now transform the selection (or whole
+  value) in whichever editable field you last used — the URL box, the POST
+  box, or any Intruder field (URL, request body, cookie) — instead of always
+  targeting the URL box. This makes **D-URL** and friends work on a captured
+  Intruder request body, which previously left it untouched.
+- **Bottom Intruder "Clear" renamed to "Clear Results"** to distinguish it from
+  the per-payload **✕ Clear list** and the **Clear §** position control.
+
+### Fixed
+- **Intruder requests no longer fail permanently on transient network errors.**
+  A burst of concurrent requests can trip a target's rate-limit / connection
+  cap (common on PortSwigger labs), which surfaces as a `Failed to fetch`
+  `TypeError` rather than a real HTTP response. The background engine now
+  retries these with exponential backoff and jitter (up to 6 attempts,
+  ≈0.25s → 4s, capped at 5s) so the requests drain through instead of showing
+  `[Error: Failed to fetch]`. Real HTTP responses (any status) and genuine
+  timeouts are never retried.
+
+---
+
 ## [2.2] — 2026-08-18
 
 A hardening and cleanup release: fixes a privileged-context XSS risk, an

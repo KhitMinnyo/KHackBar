@@ -1,8 +1,8 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.2 Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.3 Pro**
 
-> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.2** (security hardening, scope-enforcement toggle, POST → Tab, GET-aware CSRF PoC, first test suite)
+> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.3** (Intruder Numbers generator, wordlist-file loading, per-set Clear list, ascending/descending result sorting, cursor-aware encoders, transient-network-error retry)
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -49,6 +49,28 @@ Built-in encoding/decoding tools that transform the **selected text** in the URL
 - **HTML Entity** encode/decode
 - **Unicode** escape/unescape
 - **Reverse**
+
+---
+
+## 🆕 What's New in v2.3
+
+### 🔢 Numbers payload generator (Intruder)
+Every payload set now has a Burp-style **Numbers** row — enter `from → to` and a `step`, click **Generate**, and the box fills with the sequence one per line. Counts up or down and supports decimal steps (capped at 10,000). Perfect for ID enumeration and IP/back-end sweeps (e.g. `1 → 255` for an SSRF scan) without pasting a list by hand.
+
+### 📁 Load a wordlist from file (Intruder)
+A **📁 Load file** button on each payload set loads a local wordlist (`.txt`, `.lst`, SecLists, rockyou-style, …) straight into the box. The file is read **entirely client-side** with `FileReader` — nothing is uploaded anywhere. BOM, blank lines, and trailing whitespace are stripped, with a visible payload count (20 MB / 200,000-line cap).
+
+### ✕ Per-set "Clear list" + clearer controls
+Each payload set gets a **✕ Clear list** button that empties just that box (positions, URL, and body are untouched) so you can swap a pasted/loaded list fast. The bottom **Clear** button is renamed **Clear Results** to distinguish it from the payload clear and the **Clear §** position control.
+
+### ↕ Ascending/descending result sorting
+**Sort by length** and **Sort by status** now **toggle direction** when clicked again (with an `↑ ascending` / `↓ descending` status hint). The old descending-only sort hid *shorter* outliers — a short error/redirect that flags the interesting response — at the bottom off-screen; toggling pulls outliers to the top from either end.
+
+### ✍️ Cursor-aware encoders/decoders
+The URL / Hex / Base64 / HTML / Unicode encode & decode buttons now transform the selection in **whichever editable field you last used** — the URL box, the POST box, or any Intruder field (URL, request body, cookie) — instead of always targeting the URL box. **D-URL** and friends now decode a captured Intruder request body correctly.
+
+### 🔁 Transient-network-error retry (Intruder)
+A burst of concurrent requests can trip a target's rate-limit / connection cap (common on PortSwigger labs), showing up as `Failed to fetch`. The engine now retries these with exponential backoff + jitter (up to 6 attempts, ≈0.25s → 4s) so requests drain through instead of failing permanently. Real HTTP responses and genuine timeouts are never retried. *(For heavy IP sweeps, low Threads + a small Delay is still the gentlest on lab targets.)*
 
 ---
 
