@@ -456,6 +456,76 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
     return row;
   }
 
+  // ---- Numbers payload generator (Burp-style "Numbers" payload type) ----
+  // Adds a From / To / Step row above a payload textarea. "Generate" fills the
+  // textarea with the numeric sequence, one per line, which then flows through
+  // the normal linesOf() → buildVectors() pipeline unchanged. Supports counting
+  // down (from > to) and decimal steps; capped so a huge range can't blow up.
+  function makeNumbersRow(targetTa) {
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:4px; width:100%; margin-bottom:4px; align-items:center; flex-wrap:wrap;';
+
+    function numInput(ph, val, w) {
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.placeholder = ph;
+      inp.value = val;
+      inp.className = 'content-type-select';
+      inp.style.cssText = 'flex:0 0 ' + w + '; width:' + w + '; text-align:center; font-size:11px; padding:3px;';
+      return inp;
+    }
+
+    var lbl = document.createElement('span');
+    lbl.style.cssText = 'font-size:10px; color:#22c55e;';
+    lbl.textContent = 'Numbers:';
+    var fromInp = numInput('from', '1', '54px');
+    var toEl    = document.createElement('span');
+    toEl.style.cssText = 'font-size:10px; color:#6b7280;'; toEl.textContent = '→';
+    var toInp   = numInput('to', '255', '54px');
+    var stepLbl = document.createElement('span');
+    stepLbl.style.cssText = 'font-size:10px; color:#6b7280;'; stepLbl.textContent = 'step';
+    var stepInp = numInput('step', '1', '46px');
+
+    var btn = document.createElement('button');
+    btn.className = 'action-btn';
+    btn.style.cssText = 'font-size:10px; flex:0 0 auto;';
+    btn.textContent = 'Generate';
+    btn.onclick = function () {
+      var from = parseFloat(fromInp.value);
+      var to   = parseFloat(toInp.value);
+      var step = Math.abs(parseFloat(stepInp.value));
+      if (isNaN(from) || isNaN(to)) { window.KHackBar.UI.setText(status, '[!] From/To must be numbers.'); return; }
+      if (isNaN(step) || step === 0) step = 1;
+
+      var out = [];
+      var CAP = 10000; // guard against runaway ranges
+      // Decide decimals from the step so 0.5 steps print as 1.5, not 1.5000001.
+      var dec = (String(stepInp.value).split('.')[1] || '').length;
+      function fmt(n) { return dec ? n.toFixed(dec) : String(Math.round(n)); }
+      if (from <= to) {
+        for (var v = from; v <= to + 1e-9 && out.length < CAP; v += step) out.push(fmt(v));
+      } else {
+        for (var d = from; d >= to - 1e-9 && out.length < CAP; d -= step) out.push(fmt(d));
+      }
+      if (out.length >= CAP) {
+        window.KHackBar.UI.setText(status, '[!] Range capped at ' + CAP + ' numbers — narrow the range or raise the step.');
+      } else {
+        window.KHackBar.UI.setText(status, '[+] Generated ' + out.length + ' numbers (' + fmt(from) + '..' + fmt(to) + ', step ' + step + ').');
+      }
+      targetTa.value = out.join('\n');
+      logAudit('intruder_numbers', fmt(from) + '..' + fmt(to), 'step ' + step + ' → ' + out.length + ' payloads');
+    };
+
+    row.appendChild(lbl);
+    row.appendChild(fromInp);
+    row.appendChild(toEl);
+    row.appendChild(toInp);
+    row.appendChild(stepLbl);
+    row.appendChild(stepInp);
+    row.appendChild(btn);
+    return row;
+  }
+
   // ---- Detect positions and render the payload-set textareas ----
   function renderPayloadSets() {
     var parsed = parseAll();
@@ -485,6 +555,7 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
       setsWrap.appendChild(lbl);
       var snipeRow = makePresetRow(ta);
       if (snipeRow) setsWrap.appendChild(snipeRow);
+      setsWrap.appendChild(makeNumbersRow(ta));
       setsWrap.appendChild(ta);
       payloadInputs.push(ta);
     } else { // cluster bomb — one set per position
@@ -498,6 +569,7 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
         setsWrap.appendChild(l);
         var clusterRow = makePresetRow(t);
         if (clusterRow) setsWrap.appendChild(clusterRow);
+        setsWrap.appendChild(makeNumbersRow(t));
         setsWrap.appendChild(t);
         payloadInputs.push(t);
       }
