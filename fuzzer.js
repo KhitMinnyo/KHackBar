@@ -526,6 +526,84 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
     return row;
   }
 
+  // ---- Load a wordlist file from disk into a payload textarea ----
+  // Burp-style "Load ... from file": pick any text file (rockyou-style word
+  // lists, SecLists, custom payloads) and drop each line into the payload set.
+  // Reads client-side via FileReader — nothing is uploaded anywhere. Large
+  // files are capped so the UI stays responsive.
+  function makeFileRow(targetTa) {
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:4px; width:100%; margin-bottom:4px; align-items:center;';
+
+    var input = document.createElement('input');
+    input.type = 'file';
+    // Common wordlist extensions plus any text file.
+    input.accept = '.txt,.lst,.list,.dic,.dict,.wordlist,.csv,text/plain';
+    input.style.display = 'none';
+
+    var btn = document.createElement('button');
+    btn.className = 'action-btn';
+    btn.style.cssText = 'font-size:10px; flex:0 0 auto;';
+    btn.textContent = '📁 Load file';
+    btn.onclick = function () { input.click(); };
+
+    var nameLbl = document.createElement('span');
+    nameLbl.style.cssText = 'font-size:10px; color:#6b7280; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;';
+    nameLbl.textContent = 'no file — pick a wordlist (one payload per line)';
+
+    // Empty the payload textarea so a pasted/loaded list can be replaced without
+    // hand-deleting it — keeps positions, URL and body untouched.
+    var clearBtn = document.createElement('button');
+    clearBtn.className = 'action-btn';
+    clearBtn.style.cssText = 'font-size:10px; flex:0 0 auto;';
+    clearBtn.textContent = '✕ Clear list';
+    clearBtn.title = 'Clear this payload box (positions and request are kept)';
+    clearBtn.onclick = function () {
+      targetTa.value = '';
+      if (input) input.value = '';
+      nameLbl.textContent = 'no file — pick a wordlist (one payload per line)';
+      nameLbl.style.color = '#6b7280';
+      targetTa.focus();
+      window.KHackBar.UI.setText(status, '[+] Payload list cleared.');
+    };
+
+    input.onchange = function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      var MAX_BYTES = 20 * 1024 * 1024;   // 20 MB read cap
+      var MAX_LINES = 200000;             // keep the textarea/engine sane
+      if (file.size > MAX_BYTES) {
+        window.KHackBar.UI.setText(status, '[!] File too large (' + Math.round(file.size / 1048576) + ' MB). Cap is 20 MB — split the wordlist.');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onerror = function () {
+        window.KHackBar.UI.setText(status, '[!] Could not read "' + file.name + '".');
+      };
+      reader.onload = function (e) {
+        var text = String(e.target.result || '');
+        // Normalize newlines, drop blank lines and a UTF-8 BOM, trim CRs.
+        var lines = text.replace(/^﻿/, '').split(/\r\n|\r|\n/)
+          .map(function (s) { return s.replace(/\s+$/, ''); })
+          .filter(function (s) { return s.length > 0; });
+        var truncated = false;
+        if (lines.length > MAX_LINES) { lines = lines.slice(0, MAX_LINES); truncated = true; }
+        targetTa.value = lines.join('\n');
+        nameLbl.textContent = file.name + ' — ' + lines.length + ' payloads' + (truncated ? ' (capped)' : '');
+        nameLbl.style.color = '#22c55e';
+        window.KHackBar.UI.setText(status, '[+] Loaded ' + lines.length + ' payloads from "' + file.name + '"' + (truncated ? ' (capped at ' + MAX_LINES + ' lines).' : '.'));
+        logAudit('intruder_load_file', file.name, lines.length + ' payloads' + (truncated ? ' (capped)' : ''));
+      };
+      reader.readAsText(file);
+    };
+
+    row.appendChild(btn);
+    row.appendChild(nameLbl);
+    row.appendChild(clearBtn);
+    row.appendChild(input);
+    return row;
+  }
+
   // ---- Detect positions and render the payload-set textareas ----
   function renderPayloadSets() {
     var parsed = parseAll();
@@ -555,6 +633,7 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
       setsWrap.appendChild(lbl);
       var snipeRow = makePresetRow(ta);
       if (snipeRow) setsWrap.appendChild(snipeRow);
+      setsWrap.appendChild(makeFileRow(ta));
       setsWrap.appendChild(makeNumbersRow(ta));
       setsWrap.appendChild(ta);
       payloadInputs.push(ta);
@@ -569,6 +648,7 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
         setsWrap.appendChild(l);
         var clusterRow = makePresetRow(t);
         if (clusterRow) setsWrap.appendChild(clusterRow);
+        setsWrap.appendChild(makeFileRow(t));
         setsWrap.appendChild(makeNumbersRow(t));
         setsWrap.appendChild(t);
         payloadInputs.push(t);
@@ -870,17 +950,46 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
   }
 
   // Re-append existing rows in a new order (keeps highlight/markers intact).
+  // Clicking the same sort key again TOGGLES ascending/descending. This matters
+  // because the interesting response isn't always the longest: on a login
+  // bruteforce the success page is often LONGER, but on other targets the tell
+  // is a SHORTER error/redirect. A one-way (descending-only) sort would bury a
+  // short outlier at the bottom, off-screen — which looked like "sort not
+  // working". Toggling lets you pull outliers to the top from either end.
+  var sortState = { key: null, dir: 'desc' };
   function sortResults(key) {
     if (!records.length) return;
+
+    // Same key again → flip direction; new key → sensible default direction.
+    if (sortState.key === key) {
+      sortState.dir = (sortState.dir === 'desc') ? 'asc' : 'desc';
+    } else {
+      sortState.key = key;
+      sortState.dir = (key === 'idx') ? 'asc' : 'desc'; // len/status default to desc
+    }
+    var dir = sortState.dir;
+    var mul = (dir === 'asc') ? -1 : 1; // comparators below are written descending
+
     var arr = records.slice();
     if (key === 'len') {
-      arr.sort(function (a, b) { return (b.length == null ? -1 : b.length) - (a.length == null ? -1 : a.length); });
+      arr.sort(function (a, b) {
+        var la = (a.length == null ? -1 : a.length);
+        var lb = (b.length == null ? -1 : b.length);
+        return mul * (lb - la) || (a.idx - b.idx);
+      });
     } else if (key === 'status') {
-      arr.sort(function (a, b) { return (a.status || 0) - (b.status || 0) || a.idx - b.idx; });
+      arr.sort(function (a, b) {
+        return mul * ((b.status || 0) - (a.status || 0)) || (a.idx - b.idx);
+      });
     } else {
-      arr.sort(function (a, b) { return a.idx - b.idx; });
+      // Original order is always by index; toggling reverses it.
+      arr.sort(function (a, b) { return mul * (b.idx - a.idx); });
     }
     arr.forEach(function (r) { results.appendChild(r.row); });
+
+    var arrow = (dir === 'asc') ? '↑ ascending' : '↓ descending';
+    var label = key === 'len' ? 'length' : (key === 'status' ? 'status' : 'original order');
+    window.KHackBar.UI.setText(status, '[+] Sorted by ' + label + ' (' + arrow + ') — click again to reverse.');
   }
 
   function probeUrlFor(parsed) {
