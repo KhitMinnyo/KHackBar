@@ -54,6 +54,17 @@ Built-in encoding/decoding tools that transform the **selected text** in the URL
 
 ## 🆕 What's New in v2.3
 
+### 🔑 Auth-token helper (no more `curl | jq`)
+The POST section has a **🔑 Login & Set Auth** button that does the whole login-and-authenticate dance in-panel. Put the login endpoint in the URL box and the JSON credentials in the POST box, set **Content-Type** to `application/json`, then click it: KHackBar sends the login, pulls the token out of the JSON response by a dotted path (`token`, `data.accessToken`, `tokens[0].value`, …), and injects `Authorization: Bearer <token>` as a request header on that host — so every following request (browsing, POST, Intruder) is authenticated. Header name, value prefix, and the target URL pattern are all configurable, and the rule appears in the **HEADERS** panel for later edits. The **POST** button now also shows the **response body** beneath it, so tokens and error messages are finally visible.
+
+```
+# This shell flow:
+TOKEN=$(curl -s -X POST $API/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"password123"}' | jq -r '.token')
+# …becomes: URL + JSON body → 🔑 Login & Set Auth  (field: token)
+```
+
 ### 🔢 Numbers payload generator (Intruder)
 Every payload set now has a Burp-style **Numbers** row — enter `from → to` and a `step`, click **Generate**, and the box fills with the sequence one per line. Counts up or down and supports decimal steps (capped at 10,000). Perfect for ID enumeration and IP/back-end sweeps (e.g. `1 → 255` for an SSRF scan) without pasting a list by hand.
 

@@ -353,6 +353,31 @@
       POST → Tab
     </button>
   </div>
+
+  <!-- 🔑 Auth token: login POST → extract a JSON field → auto-set it as an
+       injected request header for the target host. curl+jq, but in-panel. -->
+  <div style="width:100%; margin-top:6px; padding:7px; border:1px solid #3f3f3f; border-radius:4px; background:#0a0a0a;">
+    <div style="font-size:10px; color:#22c55e; margin-bottom:5px;">🔑 Auth token — logs in with the URL + POST body above, pulls the token from the JSON response, and injects it as a header on the target host</div>
+    <div style="display:flex; gap:6px; width:100%; flex-wrap:wrap; align-items:flex-end;">
+      <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">JSON field
+        <input type="text" id="auth_token_path" value="token" placeholder="token · data.token" title="Dotted path to the token in the JSON response, e.g. token or data.accessToken" style="width:120px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+      </label>
+      <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">Header name
+        <input type="text" id="auth_header_name" value="Authorization" style="width:120px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+      </label>
+      <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">Value prefix
+        <input type="text" id="auth_prefix" value="Bearer " title="Prepended to the extracted token, e.g. 'Bearer '. Leave empty for a raw token." style="width:80px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+      </label>
+      <button id="btn_login_auth" class="action-btn" style="font-size:11px; flex:0 0 auto;">🔑 Login &amp; Set Auth</button>
+    </div>
+    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3; margin-top:5px;">Apply header to URL pattern (blank = auto from the login URL's host)
+      <input type="text" id="auth_url_pattern" placeholder="*://localhost:5001/*" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+    </label>
+  </div>
+
+  <!-- Response body from the last silent POST / Login (readonly) -->
+  <textarea id="post_response" readonly spellcheck="false" placeholder="Response body appears here after POST / Login" style="display:none; width:100%; height:100px; margin-top:6px; background:#0a0a0a; color:#22c55e; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:12px; line-height:1.4; outline:none; font-family:inherit; resize:vertical; white-space:pre-wrap; word-break:break-all;"></textarea>
+
   <div style="display:flex; align-items:center; gap:6px; margin-top:6px; width:100%;">
     <label style="display:flex; align-items:center; gap:4px; font-size:10px; color:#ef4444; cursor:pointer; user-select:none;">
       <input type="checkbox" id="chk_capture_post" style="cursor:pointer;">

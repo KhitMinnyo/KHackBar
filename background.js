@@ -282,11 +282,17 @@ async function runSimplePost(message) {
     const response = await fetch(url, init);
     clearTimeout(timeoutId);
     const responseText = await response.text();
+    // Include a capped copy of the body so the panel can show the response and
+    // extract fields (e.g. an auth token) from it — the silent POST used to
+    // return only status/length, which hid login tokens.
+    const BODY_CAP = 256 * 1024;
     return {
       success: true,
       status: response.status,
       statusText: response.statusText,
-      length: responseText.length
+      length: responseText.length,
+      body: responseText.slice(0, BODY_CAP),
+      bodyTruncated: responseText.length > BODY_CAP
     };
   } catch (err) {
     clearTimeout(timeoutId);

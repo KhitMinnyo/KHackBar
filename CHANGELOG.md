@@ -15,6 +15,20 @@ directional result sorting, encoders that follow your cursor, and clearer
 controls.
 
 ### Added
+- **Auth-token helper (POST section).** A **🔑 Login & Set Auth** flow replaces
+  the `TOKEN=$(curl … | jq -r '.token')` + `-H "Authorization: Bearer $TOKEN"`
+  shell dance: it sends the login POST using the URL + JSON body above, pulls a
+  field out of the JSON response by a dotted path (`token`, `data.accessToken`,
+  `tokens[0].value`, …), and injects `Authorization: Bearer <token>` as a
+  header on the login URL's host (or a custom URL pattern) via the same
+  `declarativeNetRequest` mechanism as the HEADERS panel. Header name and value
+  prefix are configurable, and the extracted rule shows up in the HEADERS panel
+  for later editing.
+- **POST response body is now shown.** The silent **POST** button (and the new
+  Login flow) display the response body in a readonly box beneath the POST
+  controls — previously the silent POST returned only status + length, hiding
+  tokens and error details. `runSimplePost` now returns a capped body
+  (256 KB).
 - **Numbers payload generator (Intruder).** Every payload set now has a
   Burp-style **Numbers** row — `from → to  step` with a **Generate** button
   that fills the box with the numeric sequence, one per line. Counts up or down

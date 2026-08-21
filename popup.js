@@ -42,6 +42,15 @@ document.addEventListener('DOMContentLoaded', function () {
   var postBox = document.getElementById('post_box');
   var status = document.getElementById('status');
   var contentType = document.getElementById('content_type');
+  var postResponse = document.getElementById('post_response');
+  var btnLoginAuth = document.getElementById('btn_login_auth');
+
+  // ---- Helper: show a response body in the readonly post_response box ----
+  function showPostResponse(text) {
+    if (!postResponse) return;
+    postResponse.style.display = 'block';
+    postResponse.value = (text == null ? '' : String(text));
+  }
 
   var btnLoad = document.getElementById('btn_load');
   var btnSplit = document.getElementById('btn_split');
@@ -298,9 +307,110 @@ document.addEventListener('DOMContentLoaded', function () {
           if (response && response.success) {
             var lengthNote = (typeof response.length === 'number') ? (', ' + response.length + ' bytes') : '';
             setStatus('[+] POST response received (' + response.status + lengthNote + ').');
+            if (typeof response.body === 'string') {
+              showPostResponse(response.body + (response.bodyTruncated ? '\n\n[…truncated…]' : ''));
+            }
           } else if (response && response.error) {
             setStatus('[!] POST error: ' + response.error);
           }
+        });
+      });
+    };
+  }
+
+  // 🔑 Login & Set Auth: send the POST (a JSON login), pull a field out of the
+  // JSON response (the token), and inject it as a request header on the target
+  // host — the curl `TOKEN=$(... | jq -r '.token')` + `-H "Authorization: ..."`
+  // flow, without leaving the panel.
+  function getByPath(obj, path) {
+    // Dotted path with optional [n] array indices, e.g. "data.tokens[0].value".
+    var parts = String(path || '').replace(/\[(\w+)\]/g, '.$1').split('.').filter(Boolean);
+    var cur = obj;
+    for (var i = 0; i < parts.length; i++) {
+      if (cur == null) return undefined;
+      cur = cur[parts[i]];
+    }
+    return cur;
+  }
+
+  if (btnLoginAuth) {
+    btnLoginAuth.onclick = function () {
+      var target = collapseUrl(urlBox.value);
+      var postData = postBox ? postBox.value.trim() : '';
+      var ct = contentType ? contentType.value : 'application/json';
+      var tokenPath = (document.getElementById('auth_token_path') || {}).value || 'token';
+      var headerName = ((document.getElementById('auth_header_name') || {}).value || 'Authorization').trim();
+      var prefix = (document.getElementById('auth_prefix') || {}).value;
+      if (prefix == null) prefix = '';
+      var patternInput = ((document.getElementById('auth_url_pattern') || {}).value || '').trim();
+
+      if (!target) { setStatus('[!] URL box is empty.'); return; }
+      if (!/^https?:\/\//i.test(target)) { setStatus('[!] URL must start with http:// or https://.'); return; }
+      if (!headerName) { setStatus('[!] Header name is empty.'); return; }
+
+      // Default the injection scope to the login URL's host if none was given.
+      var urlPattern = patternInput;
+      if (!urlPattern) {
+        try { urlPattern = '*://' + new URL(target).host + '/*'; }
+        catch (e) { urlPattern = '*://*/*'; }
+      }
+
+      KHackBar.Scope.getSavedScope(function (scopePattern) {
+        var scopeCheck = KHackBar.Scope.checkScope(target, scopePattern);
+        if (!scopeCheck.allowed) { setStatus('[!] ' + scopeCheck.reason); return; }
+
+        setStatus('[+] Logging in: ' + target + ' …');
+        logAudit('login_auth', target, 'Login POST to extract "' + tokenPath + '" → header ' + headerName);
+
+        chrome.runtime.sendMessage({
+          type: 'execute_post',
+          url: target,
+          data: postData,
+          contentType: ct
+        }, function (response) {
+          if (!response || !response.success) {
+            setStatus('[!] Login failed: ' + ((response && response.error) || 'no response') + '.');
+            return;
+          }
+          if (typeof response.body === 'string') {
+            showPostResponse(response.body + (response.bodyTruncated ? '\n\n[…truncated…]' : ''));
+          }
+          var token;
+          try {
+            var json = JSON.parse(response.body);
+            token = getByPath(json, tokenPath);
+          } catch (e) {
+            setStatus('[!] Login returned ' + response.status + ' but the body was not valid JSON — check the response below.');
+            return;
+          }
+          if (token == null || token === '') {
+            setStatus('[!] No value found at "' + tokenPath + '" in the response (status ' + response.status + '). Check the field path against the body below.');
+            return;
+          }
+          if (typeof token !== 'string') token = String(token);
+
+          var headerValue = prefix + token;
+          var headerObj = { header: headerName, value: headerValue, operation: 'set' };
+
+          // Persist so the HEADERS panel reflects it, then apply the DNR rule.
+          chrome.storage.local.set({
+            custom_headers: [headerObj],
+            header_url_pattern: urlPattern
+          }, function () {
+            chrome.runtime.sendMessage({
+              type: 'apply_headers',
+              urlPattern: urlPattern,
+              headers: [headerObj]
+            }, function (applyResp) {
+              if (applyResp && applyResp.success) {
+                var shown = token.length > 16 ? (token.slice(0, 12) + '…') : token;
+                setStatus('[+] Auth set — ' + headerName + ': ' + prefix + shown + ' now injected on ' + urlPattern + '. (See HEADERS panel.)');
+                logAudit('login_auth_applied', urlPattern, headerName + ' header applied from token "' + tokenPath + '"');
+              } else {
+                setStatus('[!] Extracted the token but failed to apply the header: ' + ((applyResp && applyResp.error) || 'unknown') + '.');
+              }
+            });
+          });
         });
       });
     };
