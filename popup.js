@@ -921,7 +921,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ============================================================
   var headerTitle = document.querySelector('.header h3');
   if (headerTitle) {
-    headerTitle.textContent = 'KHackBar v2.3 Pro';
+    headerTitle.textContent = 'KHackBar v2.4 Pro';
   }
 
   // Initial status

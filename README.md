@@ -1,8 +1,8 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.3 Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.4 Pro**
 
-> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.3** (Intruder Numbers generator, wordlist-file loading, per-set Clear list, ascending/descending result sorting, cursor-aware encoders, transient-network-error retry)
+> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.4** (Login & Set Auth token helper, POST response-body view — authenticated SSRF/IDOR testing without `curl | jq`)
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -52,7 +52,7 @@ Built-in encoding/decoding tools that transform the **selected text** in the URL
 
 ---
 
-## 🆕 What's New in v2.3
+## 🆕 What's New in v2.4
 
 ### 🔑 Auth-token helper (no more `curl | jq`)
 The POST section has a **🔑 Login & Set Auth** button that does the whole login-and-authenticate dance in-panel. Put the login endpoint in the URL box and the JSON credentials in the POST box, set **Content-Type** to `application/json`, then click it: KHackBar sends the login, pulls the token out of the JSON response by a dotted path (`token`, `data.accessToken`, `tokens[0].value`, …), and injects `Authorization: Bearer <token>` as a request header on that host — so every following request (browsing, POST, Intruder) is authenticated. Header name, value prefix, and the target URL pattern are all configurable, and the rule appears in the **HEADERS** panel for later edits. The **POST** button now also shows the **response body** beneath it, so tokens and error messages are finally visible.
@@ -64,6 +64,12 @@ TOKEN=$(curl -s -X POST $API/api/v1/auth/login \
   -d '{"username":"alice","password":"password123"}' | jq -r '.token')
 # …becomes: URL + JSON body → 🔑 Login & Set Auth  (field: token)
 ```
+
+Because the token is injected at the network layer, authenticated **SSRF / IDOR** testing needs no per-request header — set the token once, then drive the endpoint from **POST** (response body shown inline) or fan out internal targets with **Intruder** (`{"url":"§http://169.254.169.254/…§"}` + a wordlist or the Numbers generator).
+
+---
+
+## 🆕 What's New in v2.3
 
 ### 🔢 Numbers payload generator (Intruder)
 Every payload set now has a Burp-style **Numbers** row — enter `from → to` and a `step`, click **Generate**, and the box fills with the sequence one per line. Counts up or down and supports decimal steps (capped at 10,000). Perfect for ID enumeration and IP/back-end sweeps (e.g. `1 → 255` for an SSRF scan) without pasting a list by hand.

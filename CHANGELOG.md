@@ -7,12 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [2.3] — 2026-08-19
+## [2.4] — 2026-08-19
 
-A Fuzzer/Intruder usability release: two new ways to build payload sets
-(numeric ranges and wordlist files), reliability against rate-limited targets,
-directional result sorting, encoders that follow your cursor, and clearer
-controls.
+An authenticated-testing release: log in and carry the token automatically,
+and finally see POST response bodies — so token-gated flows (authenticated
+SSRF, IDOR, privileged endpoints) can be driven entirely from the panel
+instead of a `curl … | jq` loop.
 
 ### Added
 - **Auth-token helper (POST section).** A **🔑 Login & Set Auth** flow replaces
@@ -23,12 +23,26 @@ controls.
   header on the login URL's host (or a custom URL pattern) via the same
   `declarativeNetRequest` mechanism as the HEADERS panel. Header name and value
   prefix are configurable, and the extracted rule shows up in the HEADERS panel
-  for later editing.
+  for later editing. Because the header is injected at the network layer, it
+  rides along on every following request — plain **POST**, **POST → Tab**, and
+  **Intruder** runs alike — so authenticated SSRF/IDOR sweeps need no manual
+  header per request.
 - **POST response body is now shown.** The silent **POST** button (and the new
   Login flow) display the response body in a readonly box beneath the POST
   controls — previously the silent POST returned only status + length, hiding
   tokens and error details. `runSimplePost` now returns a capped body
   (256 KB).
+
+---
+
+## [2.3] — 2026-08-19
+
+A Fuzzer/Intruder usability release: two new ways to build payload sets
+(numeric ranges and wordlist files), reliability against rate-limited targets,
+directional result sorting, encoders that follow your cursor, and clearer
+controls.
+
+### Added
 - **Numbers payload generator (Intruder).** Every payload set now has a
   Burp-style **Numbers** row — `from → to  step` with a **Generate** button
   that fills the box with the numeric sequence, one per line. Counts up or down
