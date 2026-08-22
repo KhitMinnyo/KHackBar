@@ -42,24 +42,6 @@ document.addEventListener('DOMContentLoaded', function () {
   var postBox = document.getElementById('post_box');
   var status = document.getElementById('status');
   var contentType = document.getElementById('content_type');
-  var postResponse = document.getElementById('post_response');
-  var btnLoginAuth = document.getElementById('btn_login_auth');
-  var postUrl = document.getElementById('post_url');
-
-  // ---- Helper: the URL that POST / POST → Tab / sqlmap target ----
-  // Uses the dedicated "API URL for POST" field so the main URL box stays on the
-  // app/browse URL; falls back to the URL box when the field is blank.
-  function postTargetUrl() {
-    if (postUrl && postUrl.value.trim()) return postUrl.value.trim();
-    return collapseUrl(urlBox.value);
-  }
-
-  // ---- Helper: show a response body in the readonly post_response box ----
-  function showPostResponse(text) {
-    if (!postResponse) return;
-    postResponse.style.display = 'block';
-    postResponse.value = (text == null ? '' : String(text));
-  }
 
   var btnLoad = document.getElementById('btn_load');
   var btnSplit = document.getElementById('btn_split');
@@ -289,7 +271,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // POST: Send POST request
   if (btnExecutePost) {
     btnExecutePost.onclick = function () {
-      var target = postTargetUrl();
+      var target = collapseUrl(urlBox.value);
       var postData = postBox ? postBox.value.trim() : '';
       var ct = contentType ? contentType.value : 'application/x-www-form-urlencoded';
 
@@ -316,118 +298,9 @@ document.addEventListener('DOMContentLoaded', function () {
           if (response && response.success) {
             var lengthNote = (typeof response.length === 'number') ? (', ' + response.length + ' bytes') : '';
             setStatus('[+] POST response received (' + response.status + lengthNote + ').');
-            if (typeof response.body === 'string') {
-              showPostResponse(response.body + (response.bodyTruncated ? '\n\n[…truncated…]' : ''));
-            }
           } else if (response && response.error) {
             setStatus('[!] POST error: ' + response.error);
           }
-        });
-      });
-    };
-  }
-
-  // 🔑 Login & Set Auth: send the POST (a JSON login), pull a field out of the
-  // JSON response (the token), and inject it as a request header on the target
-  // host — the curl `TOKEN=$(... | jq -r '.token')` + `-H "Authorization: ..."`
-  // flow, without leaving the panel.
-  function getByPath(obj, path) {
-    // Dotted path with optional [n] array indices, e.g. "data.tokens[0].value".
-    var parts = String(path || '').replace(/\[(\w+)\]/g, '.$1').split('.').filter(Boolean);
-    var cur = obj;
-    for (var i = 0; i < parts.length; i++) {
-      if (cur == null) return undefined;
-      cur = cur[parts[i]];
-    }
-    return cur;
-  }
-
-  if (btnLoginAuth) {
-    btnLoginAuth.onclick = function () {
-      // The login uses its OWN Login URL + Credentials fields so the main URL /
-      // POST boxes stay free for the endpoint you're actually testing (e.g. an
-      // authenticated SSRF target). Each falls back to the main box when blank,
-      // so the old "log in with the URL + POST body above" behaviour still works.
-      var loginUrlInput = ((document.getElementById('auth_login_url') || {}).value || '').trim();
-      var loginBodyInput = ((document.getElementById('auth_login_body') || {}).value || '').trim();
-      var target = loginUrlInput || collapseUrl(urlBox.value);
-      var postData = loginBodyInput || (postBox ? postBox.value.trim() : '');
-      // Login bodies here are JSON credentials; force JSON unless the main
-      // dropdown was deliberately left on something else while reusing its box.
-      var ct = loginBodyInput ? 'application/json' : (contentType ? contentType.value : 'application/json');
-      var tokenPath = (document.getElementById('auth_token_path') || {}).value || 'token';
-      var headerName = ((document.getElementById('auth_header_name') || {}).value || 'Authorization').trim();
-      var prefix = (document.getElementById('auth_prefix') || {}).value;
-      if (prefix == null) prefix = '';
-      var patternInput = ((document.getElementById('auth_url_pattern') || {}).value || '').trim();
-
-      if (!target) { setStatus('[!] URL box is empty.'); return; }
-      if (!/^https?:\/\//i.test(target)) { setStatus('[!] URL must start with http:// or https://.'); return; }
-      if (!headerName) { setStatus('[!] Header name is empty.'); return; }
-
-      // Default the injection scope to the login URL's host if none was given.
-      var urlPattern = patternInput;
-      if (!urlPattern) {
-        try { urlPattern = '*://' + new URL(target).host + '/*'; }
-        catch (e) { urlPattern = '*://*/*'; }
-      }
-
-      KHackBar.Scope.getSavedScope(function (scopePattern) {
-        var scopeCheck = KHackBar.Scope.checkScope(target, scopePattern);
-        if (!scopeCheck.allowed) { setStatus('[!] ' + scopeCheck.reason); return; }
-
-        setStatus('[+] Logging in: ' + target + ' …');
-        logAudit('login_auth', target, 'Login POST to extract "' + tokenPath + '" → header ' + headerName);
-
-        chrome.runtime.sendMessage({
-          type: 'execute_post',
-          url: target,
-          data: postData,
-          contentType: ct
-        }, function (response) {
-          if (!response || !response.success) {
-            setStatus('[!] Login failed: ' + ((response && response.error) || 'no response') + '.');
-            return;
-          }
-          if (typeof response.body === 'string') {
-            showPostResponse(response.body + (response.bodyTruncated ? '\n\n[…truncated…]' : ''));
-          }
-          var token;
-          try {
-            var json = JSON.parse(response.body);
-            token = getByPath(json, tokenPath);
-          } catch (e) {
-            setStatus('[!] Login returned ' + response.status + ' but the body was not valid JSON — check the response below.');
-            return;
-          }
-          if (token == null || token === '') {
-            setStatus('[!] No value found at "' + tokenPath + '" in the response (status ' + response.status + '). Check the field path against the body below.');
-            return;
-          }
-          if (typeof token !== 'string') token = String(token);
-
-          var headerValue = prefix + token;
-          var headerObj = { header: headerName, value: headerValue, operation: 'set' };
-
-          // Persist so the HEADERS panel reflects it, then apply the DNR rule.
-          chrome.storage.local.set({
-            custom_headers: [headerObj],
-            header_url_pattern: urlPattern
-          }, function () {
-            chrome.runtime.sendMessage({
-              type: 'apply_headers',
-              urlPattern: urlPattern,
-              headers: [headerObj]
-            }, function (applyResp) {
-              if (applyResp && applyResp.success) {
-                var shown = token.length > 16 ? (token.slice(0, 12) + '…') : token;
-                setStatus('[+] Auth set — ' + headerName + ': ' + prefix + shown + ' now injected on ' + urlPattern + '. (See HEADERS panel.)');
-                logAudit('login_auth_applied', urlPattern, headerName + ' header applied from token "' + tokenPath + '"');
-              } else {
-                setStatus('[!] Extracted the token but failed to apply the header: ' + ((applyResp && applyResp.error) || 'unknown') + '.');
-              }
-            });
-          });
         });
       });
     };
@@ -441,7 +314,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // dashboard, a CSRF PoC's real effect, etc.
   if (btnExecutePostTab) {
     btnExecutePostTab.onclick = function () {
-      var target = postTargetUrl();
+      var target = collapseUrl(urlBox.value);
       var postData = postBox ? postBox.value.trim() : '';
       var ct = contentType ? contentType.value : 'application/x-www-form-urlencoded';
 
@@ -487,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function shq(s) { return '"' + String(s).replace(/(["$`\\])/g, '\\$1') + '"'; }
 
     btnSqlmap.onclick = function () {
-      var url = postTargetUrl();
+      var url = collapseUrl(urlBox.value);
       if (!/^https?:\/\//i.test(url)) { setStatus('[!] Enter a full http(s) URL first.'); return; }
       var data = postBox ? postBox.value.trim() : '';
       var ct = contentType ? contentType.value : '';
@@ -732,6 +605,189 @@ document.addEventListener('DOMContentLoaded', function () {
   setupMenuToggle('menu_cookies', 'cookies_panel');
   setupMenuToggle('menu_fuzzer', 'fuzzer_panel');
   setupMenuToggle('menu_settings', 'settings_panel');
+  setupMenuToggle('menu_api', 'api_panel');
+
+  // ============================================================
+  // 5c. API panel — authenticated REST API testing
+  // ============================================================
+  // Self-contained: a Login step that logs in and injects the token as a header
+  // on the target host (declarativeNetRequest, same as the HEADERS panel), and a
+  // Request step that fires GET/POST/PUT/PATCH/DELETE at any endpoint and shows
+  // the response. The injected auth header rides along on every request here.
+  (function () {
+    var elLoginUrl  = document.getElementById('api_login_url');
+    var elLoginBody = document.getElementById('api_login_body');
+    var elTokenPath = document.getElementById('api_token_path');
+    var elHeaderName = document.getElementById('api_header_name');
+    var elPrefix    = document.getElementById('api_prefix');
+    var elPattern   = document.getElementById('api_url_pattern');
+    var btnLogin    = document.getElementById('btn_api_login');
+
+    var elMethod   = document.getElementById('api_method');
+    var elApiUrl   = document.getElementById('api_url');
+    var elApiCtype = document.getElementById('api_ctype');
+    var elApiHeaders = document.getElementById('api_headers');
+    var elApiBody  = document.getElementById('api_body');
+    var btnSend    = document.getElementById('btn_api_send');
+    var btnClearResp = document.getElementById('btn_api_clear');
+
+    var apiStatus  = document.getElementById('api_status');
+    var apiResp    = document.getElementById('api_response');
+
+    if (!btnLogin && !btnSend) return; // panel not present
+
+    function setApiStatus(msg, ok) {
+      if (apiStatus) {
+        apiStatus.textContent = msg;
+        apiStatus.style.color = ok === false ? '#ef4444' : '#22c55e';
+      }
+      setStatus(msg);
+    }
+    function showResp(text) {
+      if (apiResp) apiResp.value = (text == null ? '' : String(text));
+    }
+
+    // Dotted path with optional [n] array indices, e.g. "data.tokens[0].value".
+    function getByPath(obj, path) {
+      var parts = String(path || '').replace(/\[(\w+)\]/g, '.$1').split('.').filter(Boolean);
+      var cur = obj;
+      for (var i = 0; i < parts.length; i++) {
+        if (cur == null) return undefined;
+        cur = cur[parts[i]];
+      }
+      return cur;
+    }
+
+    // Parse "Name: Value" lines into a plain headers object (blank/invalid skipped).
+    function parseHeaderLines(text) {
+      var out = {};
+      String(text || '').split(/\r?\n/).forEach(function (line) {
+        var t = line.trim();
+        if (!t) return;
+        var idx = t.indexOf(':');
+        if (idx <= 0) return;
+        var name = t.slice(0, idx).trim();
+        var val = t.slice(idx + 1).trim();
+        if (name) out[name] = val;
+      });
+      return out;
+    }
+
+    // ---- Step 1: Login & Set Auth ----
+    if (btnLogin) {
+      btnLogin.onclick = function () {
+        var target = (elLoginUrl && elLoginUrl.value.trim()) || '';
+        var body = (elLoginBody && elLoginBody.value.trim()) || '';
+        var tokenPath = (elTokenPath && elTokenPath.value.trim()) || 'token';
+        var headerName = ((elHeaderName && elHeaderName.value) || 'Authorization').trim();
+        var prefix = (elPrefix && elPrefix.value != null) ? elPrefix.value : '';
+        var patternInput = (elPattern && elPattern.value.trim()) || '';
+
+        if (!/^https?:\/\//i.test(target)) { setApiStatus('[!] Enter a valid Login URL (http:// or https://).', false); return; }
+        if (!headerName) { setApiStatus('[!] Header name is empty.', false); return; }
+
+        var urlPattern = patternInput;
+        if (!urlPattern) {
+          try { urlPattern = '*://' + new URL(target).host + '/*'; }
+          catch (e) { urlPattern = '*://*/*'; }
+        }
+
+        KHackBar.Scope.getSavedScope(function (scopePattern) {
+          var scopeCheck = KHackBar.Scope.checkScope(target, scopePattern);
+          if (!scopeCheck.allowed) { setApiStatus('[!] ' + scopeCheck.reason, false); return; }
+
+          setApiStatus('[+] Logging in: ' + target + ' …');
+          logAudit('api_login', target, 'Login to extract "' + tokenPath + '" → header ' + headerName);
+
+          chrome.runtime.sendMessage({
+            type: 'execute_post', url: target, data: body, contentType: 'application/json'
+          }, function (response) {
+            if (!response || !response.success) {
+              setApiStatus('[!] Login failed: ' + ((response && response.error) || 'no response') + '.', false);
+              return;
+            }
+            if (typeof response.body === 'string') showResp(response.body + (response.bodyTruncated ? '\n\n[…truncated…]' : ''));
+            var token;
+            try { token = getByPath(JSON.parse(response.body), tokenPath); }
+            catch (e) { setApiStatus('[!] Login returned ' + response.status + ' but the body was not valid JSON — see the response below.', false); return; }
+            if (token == null || token === '') {
+              setApiStatus('[!] No value at "' + tokenPath + '" in the response (status ' + response.status + '). Check the field path against the body below.', false);
+              return;
+            }
+            if (typeof token !== 'string') token = String(token);
+            var headerObj = { header: headerName, value: prefix + token, operation: 'set' };
+
+            chrome.storage.local.set({ custom_headers: [headerObj], header_url_pattern: urlPattern }, function () {
+              chrome.runtime.sendMessage({ type: 'apply_headers', urlPattern: urlPattern, headers: [headerObj] }, function (applyResp) {
+                if (applyResp && applyResp.success) {
+                  var shown = token.length > 16 ? (token.slice(0, 12) + '…') : token;
+                  setApiStatus('[+] Auth set — ' + headerName + ': ' + prefix + shown + ' injected on ' + urlPattern + '. Now Send requests below.');
+                  logAudit('api_login_applied', urlPattern, headerName + ' applied from token "' + tokenPath + '"');
+                } else {
+                  setApiStatus('[!] Extracted the token but failed to apply the header: ' + ((applyResp && applyResp.error) || 'unknown') + '.', false);
+                }
+              });
+            });
+          });
+        });
+      };
+    }
+
+    // ---- Step 2: Send a request ----
+    if (btnSend) {
+      btnSend.onclick = function () {
+        var method = (elMethod && elMethod.value) || 'GET';
+        var url = (elApiUrl && elApiUrl.value.trim()) || '';
+        var ctype = (elApiCtype && elApiCtype.value) || '';
+        var extraHeaders = parseHeaderLines(elApiHeaders && elApiHeaders.value);
+        var body = (elApiBody && elApiBody.value) || '';
+
+        if (!/^https?:\/\//i.test(url)) { setApiStatus('[!] Enter a valid API URL (http:// or https://).', false); return; }
+
+        KHackBar.Scope.getSavedScope(function (scopePattern) {
+          var scopeCheck = KHackBar.Scope.checkScope(url, scopePattern);
+          if (!scopeCheck.allowed) { setApiStatus('[!] ' + scopeCheck.reason, false); return; }
+
+          setApiStatus('[+] ' + method + ' ' + url + ' …');
+          logAudit('api_request', url, method + ' request');
+
+          chrome.runtime.sendMessage({
+            type: 'api_request',
+            method: method,
+            url: url,
+            contentType: ctype,
+            headers: extraHeaders,
+            body: body
+          }, function (response) {
+            if (!response || !response.success) {
+              setApiStatus('[!] Request failed: ' + ((response && response.error) || 'no response') + '.', false);
+              if (response && typeof response.body === 'string') showResp(response.body);
+              return;
+            }
+            var ok = response.status >= 200 && response.status < 400;
+            var lenNote = (typeof response.length === 'number') ? (' | ' + response.length + ' bytes') : '';
+            setApiStatus('[' + (ok ? '+' : '!') + '] ' + method + ' → ' + response.status + ' ' + (response.statusText || '') + lenNote, ok);
+            if (typeof response.body === 'string') showResp(response.body + (response.bodyTruncated ? '\n\n[…truncated…]' : ''));
+          });
+        });
+      };
+    }
+
+    if (btnClearResp) {
+      btnClearResp.onclick = function () { showResp(''); setApiStatus('[+] Response cleared.'); };
+    }
+
+    // GET has no body — dim the body box when GET is selected (cosmetic hint).
+    if (elMethod && elApiBody) {
+      var syncBodyState = function () {
+        var isGet = elMethod.value === 'GET';
+        elApiBody.style.opacity = isGet ? '0.5' : '1';
+        elApiBody.placeholder = isGet ? '(no body sent for GET)' : '{"url":"http://169.254.169.254/latest/meta-data/"}';
+      };
+      elMethod.onchange = syncBodyState;
+      syncBodyState();
+    }
+  })();
 
   // ============================================================
   // 6. Headers module initialization

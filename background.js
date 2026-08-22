@@ -199,6 +199,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep channel open for async sendResponse
   }
 
+  // ---- API panel: arbitrary-method request with custom headers ----
+  if (message.type === 'api_request') {
+    runApiRequest(message).then(sendResponse);
+    return true;
+  }
+
   // ---- Fuzzer requests ----
   // The Fuzzer used to call fetch() directly from the side panel page,
   // which is subject to that page's own CORS handling and could silently
@@ -302,6 +308,67 @@ async function runSimplePost(message) {
     let hint = '';
     if ((err.message || '').indexOf('Failed to fetch') !== -1) {
       hint = ' — host may be unreachable or expired (e.g. a closed PortSwigger lab), DNS failed, or the URL is wrong. Open the URL in a normal tab to confirm it is live.';
+    }
+    return { success: false, error: (err.message || 'Unknown error') + hint };
+  }
+}
+
+/**
+ * Execute an arbitrary-method API request for the API panel. Supports
+ * GET/POST/PUT/PATCH/DELETE, a chosen Content-Type, and extra custom headers.
+ * Runs in the background worker (host_permissions handle cross-origin) with
+ * credentials so cookies flow, and returns the response body so the panel can
+ * display it. Any header injected via the HEADERS/Login rule (e.g. the auth
+ * token) is applied by declarativeNetRequest and rides along automatically.
+ */
+async function runApiRequest(message) {
+  const timeoutMs = 30000;
+  const method = (message.method || 'GET').toUpperCase();
+  const url = (message.url || '').trim();
+  if (!/^https?:\/\//i.test(url)) {
+    return { success: false, error: 'URL must start with http:// or https:// (got: "' + url.slice(0, 40) + '").' };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const init = { method: method, signal: controller.signal, credentials: 'include' };
+  const headers = {};
+  const ct = (message.contentType || '').trim();
+  const sendsBody = method !== 'GET' && method !== 'HEAD';
+  if (sendsBody) {
+    if (ct) headers['Content-Type'] = ct;
+    init.body = message.body != null ? message.body : '';
+  }
+  // Extra per-request headers from the panel (plain {name: value} object).
+  if (message.headers && typeof message.headers === 'object') {
+    for (const k in message.headers) {
+      if (Object.prototype.hasOwnProperty.call(message.headers, k)) headers[k] = message.headers[k];
+    }
+  }
+  if (Object.keys(headers).length) init.headers = headers;
+
+  try {
+    const response = await fetch(url, init);
+    clearTimeout(timeoutId);
+    const responseText = await response.text();
+    const BODY_CAP = 512 * 1024;
+    return {
+      success: true,
+      status: response.status,
+      statusText: response.statusText,
+      length: responseText.length,
+      body: responseText.slice(0, BODY_CAP),
+      bodyTruncated: responseText.length > BODY_CAP
+    };
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      return { success: false, error: 'Timed out after ' + timeoutMs + 'ms — the host did not respond.' };
+    }
+    let hint = '';
+    if ((err.message || '').indexOf('Failed to fetch') !== -1) {
+      hint = ' — host unreachable, DNS failed, or blocked by CORS/mixed-content. Confirm the URL is live in a normal tab.';
     }
     return { success: false, error: (err.message || 'Unknown error') + hint };
   }

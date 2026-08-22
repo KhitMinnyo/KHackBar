@@ -298,6 +298,7 @@
   <div class="menu-item" id="menu_blind">Blind</div>
   <div class="menu-item" id="menu_replace">Replace</div>
   <div class="menu-item" id="menu_osci">OSCI</div>
+  <div class="menu-item" id="menu_api">API</div>
   <div class="menu-item" id="menu_headers">HEADERS</div>
   <div class="menu-item" id="menu_cookies">COOKIES</div>
   <div class="menu-item" id="menu_fuzzer">FUZZER</div>
@@ -329,14 +330,6 @@
       EXECUTE
     </button>
   </div>
-  <!-- Target URL for the POST section — kept separate from the main URL box
-       above, so that box can stay on the app/browse URL (LOAD) while you POST
-       to an API endpoint here. Blank falls back to the URL box for compatibility. -->
-  <div style="width:100%; margin-top:6px;">
-    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">🎯 API URL for POST / EXECUTE-POST <span style="color:#6b7280;">(blank = use the URL box above)</span>
-      <input type="text" id="post_url" placeholder="http://192.168.100.66:5001/api/v1/upload/avatar" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:7px; border-radius:4px; font-size:14px; outline:none; font-family:inherit;">
-    </label>
-  </div>
   <div class="input-group">
     <textarea id="post_box" placeholder="POST Data (e.g. user=admin&pass=123)"></textarea>
   </div>
@@ -361,36 +354,6 @@
       POST → Tab
     </button>
   </div>
-
-  <!-- 🔑 Auth token: login POST → extract a JSON field → auto-set it as an
-       injected request header for the target host. curl+jq, but in-panel. -->
-  <div style="width:100%; margin-top:6px; padding:7px; border:1px solid #3f3f3f; border-radius:4px; background:#0a0a0a;">
-    <div style="font-size:10px; color:#22c55e; margin-bottom:5px;">🔑 Auth token — logs in (own Login URL + Credentials below), pulls the token from the JSON response, and injects it as a header on the target host. Keeps the main URL/POST boxes free for the endpoint you're testing.</div>
-    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3; margin-bottom:5px;">Login URL <span style="color:#6b7280;">(blank = use the main URL box)</span>
-      <input type="text" id="auth_login_url" placeholder="http://192.168.100.66:5001/api/v1/auth/login" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
-    </label>
-    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3; margin-bottom:5px;">Credentials (JSON) <span style="color:#6b7280;">(blank = use the main POST box)</span>
-      <input type="text" id="auth_login_body" placeholder='{"username":"alice","password":"password123"}' style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
-    </label>
-    <div style="display:flex; gap:6px; width:100%; flex-wrap:wrap; align-items:flex-end;">
-      <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">JSON field
-        <input type="text" id="auth_token_path" value="token" placeholder="token · data.token" title="Dotted path to the token in the JSON response, e.g. token or data.accessToken" style="width:120px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
-      </label>
-      <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">Header name
-        <input type="text" id="auth_header_name" value="Authorization" style="width:120px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
-      </label>
-      <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">Value prefix
-        <input type="text" id="auth_prefix" value="Bearer " title="Prepended to the extracted token, e.g. 'Bearer '. Leave empty for a raw token." style="width:80px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
-      </label>
-      <button id="btn_login_auth" class="action-btn" style="font-size:11px; flex:0 0 auto;">🔑 Login &amp; Set Auth</button>
-    </div>
-    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3; margin-top:5px;">Apply header to URL pattern (blank = auto from the login URL's host)
-      <input type="text" id="auth_url_pattern" placeholder="*://localhost:5001/*" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
-    </label>
-  </div>
-
-  <!-- Response body from the last silent POST / Login (readonly) -->
-  <textarea id="post_response" readonly spellcheck="false" placeholder="Response body appears here after POST / Login" style="display:none; width:100%; height:100px; margin-top:6px; background:#0a0a0a; color:#22c55e; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:12px; line-height:1.4; outline:none; font-family:inherit; resize:vertical; white-space:pre-wrap; word-break:break-all;"></textarea>
 
   <div style="display:flex; align-items:center; gap:6px; margin-top:6px; width:100%;">
     <label style="display:flex; align-items:center; gap:4px; font-size:10px; color:#ef4444; cursor:pointer; user-select:none;">
@@ -439,6 +402,76 @@
 <div id="blind_panel" class="panel"></div>
 <div id="replace_panel" class="panel" style="display:none;"></div>
 <div id="osci_panel" class="panel"></div>
+
+<!-- ============================================================ -->
+<!-- API PANEL — authenticated REST API testing in one place:      -->
+<!-- log in & auto-carry the token, then send GET/POST/PUT/PATCH/  -->
+<!-- DELETE requests to an API endpoint and read the response.     -->
+<!-- ============================================================ -->
+<div id="api_panel" class="panel" style="display:none; flex-direction:column; gap:6px;">
+  <div style="width:100%; font-size:10px; color:#a3a3a3;">Authenticated REST API testing — log in once, then fire requests at any endpoint. The token is injected as a header on the host, so every request below carries it automatically.</div>
+
+  <!-- 1) AUTH: log in and set the token header -->
+  <div style="width:100%; padding:7px; border:1px solid #3f3f3f; border-radius:4px; background:#0a0a0a;">
+    <div style="font-size:11px; color:#22c55e; margin-bottom:5px;">🔑 Step 1 — Log in &amp; set auth token</div>
+    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3; margin-bottom:5px;">Login URL
+      <input type="text" id="api_login_url" placeholder="http://192.168.100.66:5001/api/v1/auth/login" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:12px; outline:none; font-family:inherit;">
+    </label>
+    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3; margin-bottom:5px;">Credentials (JSON)
+      <input type="text" id="api_login_body" placeholder='{"username":"alice","password":"password123"}' style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:12px; outline:none; font-family:inherit;">
+    </label>
+    <div style="display:flex; gap:6px; width:100%; flex-wrap:wrap; align-items:flex-end;">
+      <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">JSON field
+        <input type="text" id="api_token_path" value="token" placeholder="token · data.token" title="Dotted path to the token in the JSON response, e.g. token or data.accessToken" style="width:110px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+      </label>
+      <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">Header name
+        <input type="text" id="api_header_name" value="Authorization" style="width:110px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+      </label>
+      <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">Value prefix
+        <input type="text" id="api_prefix" value="Bearer " title="Prepended to the extracted token. Leave empty for a raw token." style="width:74px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+      </label>
+      <button id="btn_api_login" class="action-btn" style="font-size:11px; flex:0 0 auto;">🔑 Login &amp; Set Auth</button>
+    </div>
+    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3; margin-top:5px;">Apply header to URL pattern <span style="color:#6b7280;">(blank = auto from the login URL's host)</span>
+      <input type="text" id="api_url_pattern" placeholder="*://192.168.100.66:5001/*" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+    </label>
+  </div>
+
+  <!-- 2) REQUEST: send a request to any endpoint -->
+  <div style="width:100%; padding:7px; border:1px solid #3f3f3f; border-radius:4px; background:#0a0a0a;">
+    <div style="font-size:11px; color:#22c55e; margin-bottom:5px;">📡 Step 2 — Send a request</div>
+    <div style="display:flex; gap:6px; width:100%; align-items:center; margin-bottom:5px;">
+      <select id="api_method" class="content-type-select" style="flex:0 0 92px;">
+        <option value="GET">GET</option>
+        <option value="POST" selected>POST</option>
+        <option value="PUT">PUT</option>
+        <option value="PATCH">PATCH</option>
+        <option value="DELETE">DELETE</option>
+      </select>
+      <input type="text" id="api_url" placeholder="http://192.168.100.66:5001/api/v1/upload/avatar" style="flex:1; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:12px; outline:none; font-family:inherit;">
+    </div>
+    <select id="api_ctype" class="content-type-select" style="width:100%; margin-bottom:5px;">
+      <option value="application/json" selected>application/json</option>
+      <option value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</option>
+      <option value="">(no Content-Type / no body)</option>
+    </select>
+    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3; margin-bottom:5px;">Extra headers <span style="color:#6b7280;">(one per line, <code>Name: Value</code> — the auth header is already injected)</span>
+      <textarea id="api_headers" placeholder="X-Requested-With: XMLHttpRequest" style="width:100%; height:44px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:12px; line-height:1.4; outline:none; font-family:inherit; resize:vertical;"></textarea>
+    </label>
+    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">Body <span style="color:#6b7280;">(ignored for GET)</span>
+      <textarea id="api_body" placeholder='{"url":"http://169.254.169.254/latest/meta-data/"}' style="width:100%; height:72px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:13px; line-height:1.45; outline:none; font-family:inherit; resize:vertical;"></textarea>
+    </label>
+    <div style="display:flex; gap:6px; width:100%; margin-top:6px;">
+      <button id="btn_api_send" class="action-btn" style="font-size:12px; flex:1;">▶ Send</button>
+      <button id="btn_api_clear" class="action-btn" style="font-size:12px; flex:0 0 auto;">✕ Clear response</button>
+    </div>
+  </div>
+
+  <!-- 3) RESPONSE -->
+  <div id="api_status" style="width:100%; font-size:11px; color:#22c55e;"></div>
+  <textarea id="api_response" readonly spellcheck="false" placeholder="Response body appears here after Send / Login" style="width:100%; height:200px; background:#0a0a0a; color:#22c55e; border:1px solid #3f3f3f; padding:7px; border-radius:4px; font-size:12px; line-height:1.45; outline:none; font-family:inherit; resize:vertical; white-space:pre-wrap; word-break:break-all;"></textarea>
+</div>
+
 <div id="headers_panel" class="panel" style="display:none;">
   <div style="width:100%; margin-bottom:6px;">
     <input type="text" id="header_url_pattern" placeholder="URL Pattern (e.g. *://*.example.com/*)" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:6px; border-radius:4px; font-size:12px; outline:none; font-family:inherit;">

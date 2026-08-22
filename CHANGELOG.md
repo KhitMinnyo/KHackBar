@@ -9,38 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.4] — 2026-08-19
 
-An authenticated-testing release: log in and carry the token automatically,
-and finally see POST response bodies — so token-gated flows (authenticated
-SSRF, IDOR, privileged endpoints) can be driven entirely from the panel
-instead of a `curl … | jq` loop.
+Adds a dedicated **API** tab for authenticated REST API testing — log in once,
+carry the token automatically, and fire GET/POST/PUT/PATCH/DELETE requests at
+any endpoint while reading the full response. Token-gated flows (authenticated
+SSRF, IDOR, privileged endpoints) can now be driven entirely from the panel
+instead of a `curl … | jq` loop, with the main URL/POST boxes left untouched.
 
 ### Added
-- **Auth-token helper (POST section).** A **🔑 Login & Set Auth** flow replaces
-  the `TOKEN=$(curl … | jq -r '.token')` + `-H "Authorization: Bearer $TOKEN"`
-  shell dance: it sends a login POST — using its own **Login URL** and
-  **Credentials (JSON)** fields so the main URL/POST boxes stay free for the
-  endpoint you're testing (each falls back to the main box when left blank) —
-  pulls a field out of the JSON response by a dotted path (`token`, `data.accessToken`,
-  `tokens[0].value`, …), and injects `Authorization: Bearer <token>` as a
-  header on the login URL's host (or a custom URL pattern) via the same
-  `declarativeNetRequest` mechanism as the HEADERS panel. Header name and value
-  prefix are configurable, and the extracted rule shows up in the HEADERS panel
-  for later editing. Because the header is injected at the network layer, it
-  rides along on every following request — plain **POST**, **POST → Tab**, and
-  **Intruder** runs alike — so authenticated SSRF/IDOR sweeps need no manual
-  header per request.
-- **POST response body is now shown.** The silent **POST** button (and the new
-  Login flow) display the response body in a readonly box beneath the POST
-  controls — previously the silent POST returned only status + length, hiding
-  tokens and error details. `runSimplePost` now returns a capped body
-  (256 KB).
-- **Dedicated API-URL field for POST.** The POST section has its own **🎯 API
-  URL** input (used by **POST**, **POST → Tab**, and the sqlmap builder) so the
-  main URL box can stay on the app/browse URL you loaded instead of being
-  overwritten by the endpoint you're POSTing to. Blank falls back to the main
-  URL box, so nothing changes for existing single-URL use. Combined with the
-  auth helper's own Login URL, app / login / API URLs are now three separate,
-  simultaneously-visible fields.
+- **New API tab.** A self-contained panel with two steps and a response viewer:
+  - **Step 1 — Log in & set auth token.** Own **Login URL** + **Credentials
+    (JSON)** fields; sends the login, pulls a field from the JSON response by a
+    dotted path (`token`, `data.accessToken`, `tokens[0].value`, …), and injects
+    it as `Authorization: Bearer <token>` (header name / value prefix
+    configurable) on the target host — or a custom URL pattern — via the same
+    `declarativeNetRequest` mechanism as the HEADERS panel. The rule also lands
+    in the HEADERS panel for later editing.
+  - **Step 2 — Send a request.** Method dropdown (**GET / POST / PUT / PATCH /
+    DELETE**), API URL, Content-Type, extra `Name: Value` headers, and a body,
+    with a **▶ Send** button. The injected auth header rides along automatically,
+    so every request here is authenticated with no per-request header.
+  - **Response viewer.** Status line + full response body (up to 512 KB) — so
+    authenticated SSRF/IDOR responses are read right in the panel.
+  Backed by a new `api_request` background handler (arbitrary method + custom
+  headers + credentialed fetch, returning the body).
+- **POST response body available.** `runSimplePost` now returns a capped body
+  (256 KB), used by the API tab's login step.
+
+### Notes
+- The **BASIC** tab is unchanged — the earlier in-BASIC auth/API-URL controls
+  were moved into the dedicated API tab so the main URL box stays on the app
+  URL you load.
 
 ---
 

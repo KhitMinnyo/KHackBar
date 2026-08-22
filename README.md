@@ -54,18 +54,24 @@ Built-in encoding/decoding tools that transform the **selected text** in the URL
 
 ## 🆕 What's New in v2.4
 
-### 🔑 Auth-token helper (no more `curl | jq`)
-The POST section has a **🔑 Login & Set Auth** button that does the whole login-and-authenticate dance in-panel. It has its own **Login URL** and **Credentials (JSON)** fields — so the main URL/POST boxes stay free for the endpoint you're actually testing (an authenticated SSRF target, a profile API, etc.) instead of being overwritten by the login request. Fill them in and click it: KHackBar sends the login, pulls the token out of the JSON response by a dotted path (`token`, `data.accessToken`, `tokens[0].value`, …), and injects `Authorization: Bearer <token>` as a request header on that host — so every following request (browsing, POST, Intruder) is authenticated. Header name, value prefix, and the target URL pattern are all configurable, and the rule appears in the **HEADERS** panel for later edits. The **POST** button now also shows the **response body** beneath it, so tokens and error messages are finally visible.
+### 🔐 New **API** tab — authenticated REST API testing (no more `curl | jq`)
+A dedicated **API** tab handles the whole authenticated-API workflow in one place, leaving the BASIC tab's URL box on the app URL you loaded.
+
+**Step 1 — Log in & set auth token.** Fill the tab's own **Login URL** and **Credentials (JSON)** fields and click **🔑 Login & Set Auth**: KHackBar sends the login, pulls the token from the JSON response by a dotted path (`token`, `data.accessToken`, `tokens[0].value`, …), and injects `Authorization: Bearer <token>` as a request header on that host (header name, value prefix, and URL pattern all configurable). The rule also appears in the **HEADERS** panel.
+
+**Step 2 — Send a request.** Pick a method (**GET / POST / PUT / PATCH / DELETE**), enter the API URL, Content-Type, any extra `Name: Value` headers, and a body, then **▶ Send**. The injected auth header rides along automatically, and the full **response body** is shown below (up to 512 KB).
 
 ```
 # This shell flow:
 TOKEN=$(curl -s -X POST $API/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"password123"}' | jq -r '.token')
-# …becomes: URL + JSON body → 🔑 Login & Set Auth  (field: token)
+curl -s -X POST $API/api/v1/upload/avatar -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{"url":"http://169.254.169.254/…"}' | jq
+# …becomes: API tab → Step 1 (Login & Set Auth) → Step 2 (POST + body) → ▶ Send
 ```
 
-Because the token is injected at the network layer, authenticated **SSRF / IDOR** testing needs no per-request header — set the token once, then drive the endpoint from **POST** (response body shown inline) or fan out internal targets with **Intruder** (`{"url":"§http://169.254.169.254/…§"}` + a wordlist or the Numbers generator).
+Because the token is injected at the network layer, authenticated **SSRF / IDOR** testing needs no per-request header — log in once, then hit the endpoint from the API tab, or fan out internal targets with **Intruder** (`{"url":"§http://169.254.169.254/…§"}` + a wordlist or the Numbers generator).
 
 ---
 
