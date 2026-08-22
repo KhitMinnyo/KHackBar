@@ -636,24 +636,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!btnLogin && !btnSend) return; // panel not present
 
-    // Auto-fill Step 1 from the BASIC url-area whenever the API tab opens: the
-    // Auto-capture feature drops the captured login (URL + JSON credentials)
-    // into the main URL/POST boxes, so mirroring them here means the login is
-    // ready without retyping. Only fills a field that's empty, so manual edits
-    // are never clobbered.
-    var mainUrlBox = document.getElementById('url_box');
-    var mainPostBox = document.getElementById('post_box');
-    function prefillLoginFromMain() {
-      if (elLoginUrl && !elLoginUrl.value.trim() && mainUrlBox && mainUrlBox.value.trim()) {
-        elLoginUrl.value = mainUrlBox.value.trim().split('\n')[0].trim();
-      }
-      if (elLoginBody && !elLoginBody.value.trim() && mainPostBox && mainPostBox.value.trim()) {
-        elLoginBody.value = mainPostBox.value.trim();
-      }
+    // Auto-fill Step 1 from the CAPTURED login whenever the API tab opens. The
+    // source is the last auto-captured POST (chrome.storage.local
+    // `last_captured_post`) — i.e. the real login request the user submitted —
+    // NOT the main URL box. The main URL box holds the web-app page you're
+    // browsing (e.g. /app/profile/1), which is the wrong endpoint to log in to
+    // (POSTing there returns 405). Only fills a field that's empty, so manual
+    // edits are never clobbered.
+    function prefillLoginFromCapture() {
+      chrome.storage.local.get(['last_captured_post'], function (res) {
+        var cap = res && res.last_captured_post;
+        if (!cap) return;
+        if (elLoginUrl && !elLoginUrl.value.trim() && cap.url) elLoginUrl.value = cap.url;
+        if (elLoginBody && !elLoginBody.value.trim() && cap.body) elLoginBody.value = cap.body;
+      });
     }
     var apiMenuItem = document.getElementById('menu_api');
-    if (apiMenuItem) apiMenuItem.addEventListener('click', prefillLoginFromMain);
-    prefillLoginFromMain(); // in case the boxes are already filled at load
+    if (apiMenuItem) apiMenuItem.addEventListener('click', prefillLoginFromCapture);
+    prefillLoginFromCapture(); // in case a login was already captured at load
 
     function setApiStatus(msg, ok) {
       if (apiStatus) {
