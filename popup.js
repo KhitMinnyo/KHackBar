@@ -636,6 +636,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!btnLogin && !btnSend) return; // panel not present
 
+    // Auto-fill Step 1 from the BASIC url-area whenever the API tab opens: the
+    // Auto-capture feature drops the captured login (URL + JSON credentials)
+    // into the main URL/POST boxes, so mirroring them here means the login is
+    // ready without retyping. Only fills a field that's empty, so manual edits
+    // are never clobbered.
+    var mainUrlBox = document.getElementById('url_box');
+    var mainPostBox = document.getElementById('post_box');
+    function prefillLoginFromMain() {
+      if (elLoginUrl && !elLoginUrl.value.trim() && mainUrlBox && mainUrlBox.value.trim()) {
+        elLoginUrl.value = mainUrlBox.value.trim().split('\n')[0].trim();
+      }
+      if (elLoginBody && !elLoginBody.value.trim() && mainPostBox && mainPostBox.value.trim()) {
+        elLoginBody.value = mainPostBox.value.trim();
+      }
+    }
+    var apiMenuItem = document.getElementById('menu_api');
+    if (apiMenuItem) apiMenuItem.addEventListener('click', prefillLoginFromMain);
+    prefillLoginFromMain(); // in case the boxes are already filled at load
+
     function setApiStatus(msg, ok) {
       if (apiStatus) {
         apiStatus.textContent = msg;
