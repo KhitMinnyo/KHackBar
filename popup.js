@@ -335,9 +335,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (btnLoginAuth) {
     btnLoginAuth.onclick = function () {
-      var target = collapseUrl(urlBox.value);
-      var postData = postBox ? postBox.value.trim() : '';
-      var ct = contentType ? contentType.value : 'application/json';
+      // The login uses its OWN Login URL + Credentials fields so the main URL /
+      // POST boxes stay free for the endpoint you're actually testing (e.g. an
+      // authenticated SSRF target). Each falls back to the main box when blank,
+      // so the old "log in with the URL + POST body above" behaviour still works.
+      var loginUrlInput = ((document.getElementById('auth_login_url') || {}).value || '').trim();
+      var loginBodyInput = ((document.getElementById('auth_login_body') || {}).value || '').trim();
+      var target = loginUrlInput || collapseUrl(urlBox.value);
+      var postData = loginBodyInput || (postBox ? postBox.value.trim() : '');
+      // Login bodies here are JSON credentials; force JSON unless the main
+      // dropdown was deliberately left on something else while reusing its box.
+      var ct = loginBodyInput ? 'application/json' : (contentType ? contentType.value : 'application/json');
       var tokenPath = (document.getElementById('auth_token_path') || {}).value || 'token';
       var headerName = ((document.getElementById('auth_header_name') || {}).value || 'Authorization').trim();
       var prefix = (document.getElementById('auth_prefix') || {}).value;

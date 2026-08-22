@@ -17,8 +17,10 @@ instead of a `curl … | jq` loop.
 ### Added
 - **Auth-token helper (POST section).** A **🔑 Login & Set Auth** flow replaces
   the `TOKEN=$(curl … | jq -r '.token')` + `-H "Authorization: Bearer $TOKEN"`
-  shell dance: it sends the login POST using the URL + JSON body above, pulls a
-  field out of the JSON response by a dotted path (`token`, `data.accessToken`,
+  shell dance: it sends a login POST — using its own **Login URL** and
+  **Credentials (JSON)** fields so the main URL/POST boxes stay free for the
+  endpoint you're testing (each falls back to the main box when left blank) —
+  pulls a field out of the JSON response by a dotted path (`token`, `data.accessToken`,
   `tokens[0].value`, …), and injects `Authorization: Bearer <token>` as a
   header on the login URL's host (or a custom URL pattern) via the same
   `declarativeNetRequest` mechanism as the HEADERS panel. Header name and value

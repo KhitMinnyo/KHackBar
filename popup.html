@@ -357,7 +357,13 @@
   <!-- 🔑 Auth token: login POST → extract a JSON field → auto-set it as an
        injected request header for the target host. curl+jq, but in-panel. -->
   <div style="width:100%; margin-top:6px; padding:7px; border:1px solid #3f3f3f; border-radius:4px; background:#0a0a0a;">
-    <div style="font-size:10px; color:#22c55e; margin-bottom:5px;">🔑 Auth token — logs in with the URL + POST body above, pulls the token from the JSON response, and injects it as a header on the target host</div>
+    <div style="font-size:10px; color:#22c55e; margin-bottom:5px;">🔑 Auth token — logs in (own Login URL + Credentials below), pulls the token from the JSON response, and injects it as a header on the target host. Keeps the main URL/POST boxes free for the endpoint you're testing.</div>
+    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3; margin-bottom:5px;">Login URL <span style="color:#6b7280;">(blank = use the main URL box)</span>
+      <input type="text" id="auth_login_url" placeholder="http://192.168.100.66:5001/api/v1/auth/login" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+    </label>
+    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3; margin-bottom:5px;">Credentials (JSON) <span style="color:#6b7280;">(blank = use the main POST box)</span>
+      <input type="text" id="auth_login_body" placeholder='{"username":"alice","password":"password123"}' style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
+    </label>
     <div style="display:flex; gap:6px; width:100%; flex-wrap:wrap; align-items:flex-end;">
       <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">JSON field
         <input type="text" id="auth_token_path" value="token" placeholder="token · data.token" title="Dotted path to the token in the JSON response, e.g. token or data.accessToken" style="width:120px; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:4px; border-radius:4px; font-size:11px; outline:none; font-family:inherit;">
