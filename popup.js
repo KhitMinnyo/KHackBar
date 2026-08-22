@@ -44,6 +44,15 @@ document.addEventListener('DOMContentLoaded', function () {
   var contentType = document.getElementById('content_type');
   var postResponse = document.getElementById('post_response');
   var btnLoginAuth = document.getElementById('btn_login_auth');
+  var postUrl = document.getElementById('post_url');
+
+  // ---- Helper: the URL that POST / POST → Tab / sqlmap target ----
+  // Uses the dedicated "API URL for POST" field so the main URL box stays on the
+  // app/browse URL; falls back to the URL box when the field is blank.
+  function postTargetUrl() {
+    if (postUrl && postUrl.value.trim()) return postUrl.value.trim();
+    return collapseUrl(urlBox.value);
+  }
 
   // ---- Helper: show a response body in the readonly post_response box ----
   function showPostResponse(text) {
@@ -280,7 +289,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // POST: Send POST request
   if (btnExecutePost) {
     btnExecutePost.onclick = function () {
-      var target = collapseUrl(urlBox.value);
+      var target = postTargetUrl();
       var postData = postBox ? postBox.value.trim() : '';
       var ct = contentType ? contentType.value : 'application/x-www-form-urlencoded';
 
@@ -432,7 +441,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // dashboard, a CSRF PoC's real effect, etc.
   if (btnExecutePostTab) {
     btnExecutePostTab.onclick = function () {
-      var target = collapseUrl(urlBox.value);
+      var target = postTargetUrl();
       var postData = postBox ? postBox.value.trim() : '';
       var ct = contentType ? contentType.value : 'application/x-www-form-urlencoded';
 
@@ -478,7 +487,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function shq(s) { return '"' + String(s).replace(/(["$`\\])/g, '\\$1') + '"'; }
 
     btnSqlmap.onclick = function () {
-      var url = collapseUrl(urlBox.value);
+      var url = postTargetUrl();
       if (!/^https?:\/\//i.test(url)) { setStatus('[!] Enter a full http(s) URL first.'); return; }
       var data = postBox ? postBox.value.trim() : '';
       var ct = contentType ? contentType.value : '';

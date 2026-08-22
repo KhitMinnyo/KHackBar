@@ -329,6 +329,14 @@
       EXECUTE
     </button>
   </div>
+  <!-- Target URL for the POST section — kept separate from the main URL box
+       above, so that box can stay on the app/browse URL (LOAD) while you POST
+       to an API endpoint here. Blank falls back to the URL box for compatibility. -->
+  <div style="width:100%; margin-top:6px;">
+    <label style="display:flex; flex-direction:column; gap:2px; font-size:9px; color:#a3a3a3;">🎯 API URL for POST / EXECUTE-POST <span style="color:#6b7280;">(blank = use the URL box above)</span>
+      <input type="text" id="post_url" placeholder="http://192.168.100.66:5001/api/v1/upload/avatar" style="width:100%; background:#0a0a0a; color:#ef4444; border:1px solid #3f3f3f; padding:7px; border-radius:4px; font-size:14px; outline:none; font-family:inherit;">
+    </label>
+  </div>
   <div class="input-group">
     <textarea id="post_box" placeholder="POST Data (e.g. user=admin&pass=123)"></textarea>
   </div>

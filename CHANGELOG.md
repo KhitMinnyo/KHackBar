@@ -34,6 +34,13 @@ instead of a `curl … | jq` loop.
   controls — previously the silent POST returned only status + length, hiding
   tokens and error details. `runSimplePost` now returns a capped body
   (256 KB).
+- **Dedicated API-URL field for POST.** The POST section has its own **🎯 API
+  URL** input (used by **POST**, **POST → Tab**, and the sqlmap builder) so the
+  main URL box can stay on the app/browse URL you loaded instead of being
+  overwritten by the endpoint you're POSTing to. Blank falls back to the main
+  URL box, so nothing changes for existing single-URL use. Combined with the
+  auth helper's own Login URL, app / login / API URLs are now three separate,
+  simultaneously-visible fields.
 
 ---
 
