@@ -162,6 +162,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message.type === 'set_capture_traffic_enabled') {
+    const enabled = !!message.enabled;
+    // Same storage-is-the-source-of-truth discipline as
+    // set_capture_post_enabled above. Deliberately a SEPARATE flag from
+    // capture_post_enabled: opting into POST capture (e.g. to test one
+    // login form) must not silently also opt the user into logging every
+    // background API call the active tab makes, and vice versa.
+    chrome.storage.local.set({ capture_traffic_enabled: enabled });
+    sendResponse({ success: true, enabled: enabled });
+    return false;
+  }
+
   // ---- POST captured by the in-page content script ----
   // Reliable even when the service worker was asleep: this very message wakes
   // it. Gate on the stored enabled flag, save, and relay to the panel.
@@ -662,4 +674,83 @@ chrome.webRequest.onSendHeaders.addListener(
 chrome.webRequest.onErrorOccurred.addListener(
   (details) => { pendingPostCaptures.delete(details.requestId); },
   { urls: ['<all_urls>'] }
+);
+
+// ============================================================
+// API Traffic Log
+// ============================================================
+// Surfaces the REAL backend URL an SPA calls behind the scenes — e.g. the
+// address bar shows /app/profile/5 while the page's own fetch()/XHR
+// actually hits /api/v1/users/5. That real URL is invisible today (POST
+// Capture above only ever looks at POST); this logs method+URL for every
+// background request the active tab makes, of any method.
+//
+// Deliberately a SEPARATE listener registration from the POST Capture
+// listeners above, not an added branch inside them — not one line above
+// this point changes. Chrome supports multiple independent listeners on
+// the same webRequest event, so this stays fully isolated from the
+// POST-capture pipeline's state (pendingPostCaptures, etc).
+//
+// Also deliberately simpler than the POST pipeline's two-stage
+// (onBeforeRequest + onSendHeaders) design: that split exists only because
+// Content-Type isn't available until onSendHeaders. This feature only needs
+// {timestamp, method, url, tabId} — all present on the base onBeforeRequest
+// `details` object with no extra opt-in — so there's no pending-requestId
+// Map and no stale-entry cleanup to maintain.
+//
+// Note: a request is logged the moment it's *attempted*, even if it later
+// fails (CORS-blocked, aborted, DNS error). For a recon tool that's a
+// feature, not a bug — "the frontend tried to call X and got blocked" is
+// exactly the kind of hidden-surface signal this panel exists to show.
+
+// Kept numerically in sync with Config.MAX_TRAFFIC_LOG_ENTRIES in config.js
+// by hand — duplicated, not shared, because this file cannot load config.js
+// (see the comment there).
+const TRAFFIC_LOG_MAX_ENTRIES = 300;
+
+function appendTrafficLogEntry(entry) {
+  chrome.storage.local.get(['traffic_logs'], (res) => {
+    const logs = (res && res.traffic_logs) || [];
+    logs.push(entry);
+    chrome.storage.local.set({
+      traffic_logs: logs.length > TRAFFIC_LOG_MAX_ENTRIES
+        ? logs.slice(logs.length - TRAFFIC_LOG_MAX_ENTRIES)
+        : logs
+    });
+  });
+}
+
+chrome.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    // -1 (or any negative tabId) means this request isn't tied to a browser
+    // tab — e.g. KHackBar's own EXECUTE/POST/Fuzzer/Intruder/API-tab calls,
+    // which run from this service worker itself, not a tab. Without this
+    // guard the panel would end up logging its own outgoing test traffic as
+    // if it were the page's. Same guard the POST pipeline uses
+    // (pending.tabId < 0).
+    if (details.tabId < 0) return;
+
+    // Freshly read on every request, never cached in a module variable —
+    // same reasoning as the POST pipeline: the MV3 service worker can sleep
+    // and wake on the very event that needs this check.
+    chrome.storage.local.get(['capture_traffic_enabled'], (res) => {
+      if (!res || !res.capture_traffic_enabled) return;
+
+      // Only log the currently active/focused tab, same as POST capture —
+      // avoids silently logging background-tab traffic unrelated to what
+      // the user is actually looking at.
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+        const activeId = tabs && tabs[0] ? tabs[0].id : null;
+        if (activeId !== null && details.tabId !== activeId) return;
+
+        appendTrafficLogEntry({
+          timestamp: details.timeStamp || Date.now(),
+          method: details.method,
+          url: details.url,
+          tabId: details.tabId
+        });
+      });
+    });
+  },
+  { urls: ['<all_urls>'], types: ['xmlhttprequest'] }
 );

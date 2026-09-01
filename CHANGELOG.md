@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.5] — 2026-09-01
+
+Adds a passive **API Traffic Log** — see the real backend URL an SPA calls
+behind a route like `/app/profile/5` (e.g. `/api/v1/users/5`), even for
+background GET/fetch calls that never touch the address bar. Also fixes the
+version number being hardcoded in two places, which had let the visible
+header drift out of sync with the real release.
+
+### Added
+- **API Traffic Log (Settings tab).** A new **Log background API calls
+  (fetch/XHR) from active tab** toggle — off by default, independent of
+  *Auto-capture POST* above it — logs method + URL for every background
+  `fetch()`/`XMLHttpRequest` call the active tab makes (any HTTP method, not
+  just GET) into a capped, scrollable list (300 entries, oldest dropped
+  first), in the same layout as Audit Logs. Each row has a **Copy** button to
+  grab the URL for the URL box, Intruder, or a terminal. Backed by a second,
+  independent `webRequest.onBeforeRequest` listener — the existing POST
+  Capture listeners are unchanged — scoped to the active/focused tab only,
+  with the same fresh-storage-read enable-gate discipline as POST Capture.
+
+### Fixed
+- **Version number was hardcoded in two places and could drift.** The side
+  panel's header title (`popup.html`'s `<h3>` and a matching hardcoded string
+  in `popup.js`) duplicated the version from `manifest.json` by hand — easy
+  to bump one and forget the other. `manifest.json`'s `"version"` field is
+  now the single source of truth; the header reads it at runtime via
+  `chrome.runtime.getManifest().version` instead of carrying its own copy.
+
+---
+
 ## [2.4] — 2026-08-19
 
 Adds a dedicated **API** tab for authenticated REST API testing — log in once,
@@ -375,6 +405,9 @@ and a **Copy as sqlmap** export.
   execution, encoders/decoders, scope enforcement, and audit logging — all in a
   side-panel, Red Team-themed UI on Manifest V3.
 
+[2.5]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.5
+[2.4]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.4
+[2.3]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.3
 [2.2]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.2
 [2.1]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.1
 [1.8]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v1.8

@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function () {
     { name: 'KHackBar.UI',       key: 'UI' },
     { name: 'KHackBar.Scope',    key: 'Scope' },
     { name: 'KHackBar.Audit',    key: 'Audit' },
+    { name: 'KHackBar.TrafficLog', key: 'TrafficLog' },
     { name: 'KHackBar.Payloads', key: 'Payloads' },
     { name: 'KHackBar.Headers',  key: 'Headers' },
     { name: 'KHackBar.Cookies',  key: 'Cookies' },
@@ -984,6 +985,9 @@ document.addEventListener('DOMContentLoaded', function () {
     btnImportConfig: document.getElementById('btn_import_config'),
     btnClearLogs: document.getElementById('btn_clear_logs'),
     auditLogContainer: document.getElementById('audit_log_container'),
+    chkCaptureTraffic: document.getElementById('chk_capture_traffic'),
+    btnClearTrafficLog: document.getElementById('btn_clear_traffic_log'),
+    trafficLogContainer: document.getElementById('traffic_log_container'),
     status: status,
     logAudit: logAudit
   });
@@ -1002,6 +1006,7 @@ document.addEventListener('DOMContentLoaded', function () {
           settingsPanel.style.display = 'flex';
           setTimeout(function () {
             if (settingsApi && settingsApi.refreshAuditLogDisplay) settingsApi.refreshAuditLogDisplay();
+            if (settingsApi && settingsApi.refreshTrafficLogDisplay) settingsApi.refreshTrafficLogDisplay();
           }, window.KHackBar.Config.AUDIT_REFRESH_DELAY);
         }
       };
@@ -1011,9 +1016,16 @@ document.addEventListener('DOMContentLoaded', function () {
   // ============================================================
   // 10. Update version display
   // ============================================================
+  // manifest.json's "version" field is the ONLY place the version number
+  // is written by hand — read it at runtime instead of hardcoding a second
+  // copy here. A hardcoded copy is exactly how the header used to drift out
+  // of sync with the real version (this string and manifest.json's version
+  // had to be bumped together by hand on every release, and it was easy to
+  // update one and forget the other).
   var headerTitle = document.querySelector('.header h3');
   if (headerTitle) {
-    headerTitle.textContent = 'KHackBar v2.4 Pro';
+    var manifestVersion = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '';
+    headerTitle.textContent = 'KHackBar' + (manifestVersion ? ' v' + manifestVersion : '') + ' Pro';
   }
 
   // Initial status

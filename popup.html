@@ -277,7 +277,7 @@
     <circle cx="12" cy="12" r="3"/>
     <circle cx="12" cy="12" r="1" fill="#dc2626"/>
   </svg>
-  <h3>KHackBar v2.4 Pro</h3>
+  <h3>KHackBar</h3>
 </div>
 <div class="menu-bar">
   <div class="menu-item" id="menu_sql">BASIC</div>
@@ -694,6 +694,18 @@
     </div>
     <div id="audit_log_container" style="width:100%; background:#0a0a0a; border:1px solid #3f3f3f; border-radius:4px; padding:6px; max-height:200px; overflow-y:auto; font-size:10px; font-family:inherit;"></div>
   </div>
+  <div class="settings-section">
+    <div class="settings-section-title">API Traffic Log</div>
+    <label style="display:flex; align-items:center; gap:5px; font-size:10px; color:#ef4444; cursor:pointer; user-select:none;">
+      <input type="checkbox" id="chk_capture_traffic" style="cursor:pointer;">
+      🔴 Log background API calls (fetch/XHR) from active tab
+    </label>
+    <div style="width:100%; font-size:9px; color:#a3a3a3; margin-top:3px;">Independent of "Auto-capture POST" above — logs the URL + method of every fetch/XHR call (any HTTP method), so you can see the real backend endpoint an SPA calls behind a route like <code>/app/profile/5</code>. Off by default.</div>
+    <div class="settings-row" style="margin-top:6px;">
+      <button id="btn_clear_traffic_log" class="settings-btn">Clear Traffic Log</button>
+    </div>
+    <div id="traffic_log_container" style="width:100%; background:#0a0a0a; border:1px solid #3f3f3f; border-radius:4px; padding:6px; max-height:200px; overflow-y:auto; font-size:10px; font-family:inherit;"></div>
+  </div>
 </div>
 
 <div class="status-area" id="status">Engine Ready.</div>
@@ -705,6 +717,7 @@
 <script src="ssti.js"></script>
 <script src="scope.js"></script>
 <script src="audit.js"></script>
+<script src="traffic-log.js"></script>
 <script src="cookies.js"></script>
 <script src="headers.js"></script>
 <script src="fuzzer.js"></script>

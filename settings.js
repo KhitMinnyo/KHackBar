@@ -16,6 +16,9 @@ if (!window.KHackBar.UI) {
 if (!window.KHackBar.Audit) {
   console.error("KHackBar.Settings: KHackBar.Audit module missing — audit log features disabled");
 }
+if (!window.KHackBar.TrafficLog) {
+  console.error("KHackBar.Settings: KHackBar.TrafficLog module missing — traffic log features disabled");
+}
 
 /**
  * Initialize the settings module.
@@ -27,6 +30,9 @@ if (!window.KHackBar.Audit) {
  * @param {HTMLElement} opts.btnImportConfig - Import config button
  * @param {HTMLElement} opts.btnClearLogs - Clear logs button
  * @param {HTMLElement} opts.auditLogContainer - Audit log container element
+ * @param {HTMLElement} [opts.chkCaptureTraffic] - Traffic-log capture toggle checkbox
+ * @param {HTMLElement} [opts.btnClearTrafficLog] - Clear traffic log button
+ * @param {HTMLElement} [opts.trafficLogContainer] - Traffic log container element
  * @param {HTMLElement} opts.status - Status text element
  * @param {function} opts.logAudit - Audit logging function
  */
@@ -39,6 +45,9 @@ window.KHackBar.Settings.init = function (opts) {
   var btnImportConfig = opts.btnImportConfig;
   var btnClearLogs = opts.btnClearLogs;
   var auditLogContainer = opts.auditLogContainer;
+  var chkCaptureTraffic = opts.chkCaptureTraffic;
+  var btnClearTrafficLog = opts.btnClearTrafficLog;
+  var trafficLogContainer = opts.trafficLogContainer;
   var status = opts.status;
   var logAudit = opts.logAudit || function () {};
 
@@ -111,6 +120,7 @@ window.KHackBar.Settings.init = function (opts) {
     scope_pattern: function (v) { return typeof v === 'string'; },
     scope_enabled: function (v) { return typeof v === 'boolean'; },
     capture_post_enabled: function (v) { return typeof v === 'boolean'; },
+    capture_traffic_enabled: function (v) { return typeof v === 'boolean'; },
     header_url_pattern: function (v) { return typeof v === 'string'; },
     custom_headers: function (v) {
       return Array.isArray(v) && v.every(function (h) {
@@ -118,6 +128,11 @@ window.KHackBar.Settings.init = function (opts) {
       });
     },
     audit_logs: function (v) { return Array.isArray(v); },
+    traffic_logs: function (v) {
+      return Array.isArray(v) && v.every(function (e) {
+        return e && typeof e === 'object' && typeof e.url === 'string' && typeof e.method === 'string';
+      });
+    },
     last_captured_post: function (v) {
       return v && typeof v === 'object' && typeof v.url === 'string' && typeof v.body === 'string';
     }
@@ -257,8 +272,122 @@ window.KHackBar.Settings.init = function (opts) {
     });
   }
 
-  // Expose refresh function for the menu click handler
+  // ---- Traffic Log capture toggle ----
+  // Deliberately a separate flag from capture_post_enabled — never
+  // auto-syncs with or implies the other toggle, so opting into one
+  // doesn't silently opt the user into the other.
+  if (chkCaptureTraffic) {
+    chrome.storage.local.get(['capture_traffic_enabled'], function (result) {
+      chkCaptureTraffic.checked = !!result.capture_traffic_enabled;
+    });
+    chkCaptureTraffic.onchange = function () {
+      var enabled = chkCaptureTraffic.checked;
+      chrome.runtime.sendMessage({ type: 'set_capture_traffic_enabled', enabled: enabled }, function () {
+        void chrome.runtime.lastError;
+        window.KHackBar.UI.setText(status, enabled
+          ? '[+] Logging background API calls (fetch/XHR) from the active tab.'
+          : '[+] Traffic logging stopped.');
+      });
+    };
+  }
+
+  function emptyTrafficLogPlaceholder() {
+    var emptyMsg = document.createElement('div');
+    emptyMsg.style.color = '#a3a3a3';
+    emptyMsg.style.fontSize = '10px';
+    emptyMsg.style.padding = '4px';
+    emptyMsg.textContent = 'No traffic captured yet.';
+    return emptyMsg;
+  }
+
+  // ---- Clear Traffic Log ----
+  if (btnClearTrafficLog) {
+    btnClearTrafficLog.onclick = function () {
+      if (!window.KHackBar.TrafficLog) return;
+      window.KHackBar.TrafficLog.clearLog(function () {
+        window.KHackBar.UI.setText(status, '[+] Traffic log cleared.');
+        if (trafficLogContainer) {
+          while (trafficLogContainer.firstChild) {
+            trafficLogContainer.removeChild(trafficLogContainer.firstChild);
+          }
+          trafficLogContainer.appendChild(emptyTrafficLogPlaceholder());
+        }
+      });
+    };
+  }
+
+  // ---- Refresh Traffic Log Display ----
+  function refreshTrafficLogDisplay() {
+    if (!trafficLogContainer || !window.KHackBar.TrafficLog) return;
+
+    window.KHackBar.TrafficLog.getLog(function (logs) {
+      while (trafficLogContainer.firstChild) {
+        trafficLogContainer.removeChild(trafficLogContainer.firstChild);
+      }
+      if (!logs || logs.length === 0) {
+        trafficLogContainer.appendChild(emptyTrafficLogPlaceholder());
+        return;
+      }
+
+      // Show latest entries first, same convention as the audit log.
+      var reversed = logs.slice().reverse();
+      reversed.forEach(function (entry) {
+        var row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '4px';
+        row.style.padding = '3px';
+        row.style.borderBottom = '1px solid #3f3f3f';
+        row.style.fontSize = '9px';
+        row.style.lineHeight = '1.4';
+
+        var timeSpan = document.createElement('span');
+        timeSpan.style.color = '#6b7280';
+        timeSpan.style.flex = '0 0 auto';
+        try {
+          timeSpan.textContent = new Date(entry.timestamp).toLocaleTimeString();
+        } catch (e) {
+          timeSpan.textContent = '--:--:--';
+        }
+
+        var methodSpan = document.createElement('span');
+        methodSpan.style.color = '#22c55e';
+        methodSpan.style.fontWeight = 'bold';
+        methodSpan.style.flex = '0 0 auto';
+        methodSpan.textContent = '[' + (entry.method || '?') + ']';
+
+        var urlSpan = document.createElement('span');
+        urlSpan.style.color = '#a3a3a3';
+        urlSpan.style.flex = '1';
+        urlSpan.style.wordBreak = 'break-all';
+        urlSpan.textContent = entry.url || '';
+        urlSpan.title = entry.url || '';
+
+        var copyBtn = document.createElement('button');
+        copyBtn.className = 'small-btn';
+        copyBtn.textContent = 'Copy';
+        copyBtn.style.fontSize = '9px';
+        copyBtn.style.flex = '0 0 auto';
+        copyBtn.onclick = function () {
+          if (!navigator.clipboard) return;
+          var entryUrl = entry.url || '';
+          navigator.clipboard.writeText(entryUrl)
+            .then(function () { window.KHackBar.UI.setText(status, '[+] Copied: ' + entryUrl); })
+            .catch(function () { window.KHackBar.UI.setText(status, '[!] Copy failed.'); });
+        };
+
+        row.appendChild(timeSpan);
+        row.appendChild(methodSpan);
+        row.appendChild(urlSpan);
+        row.appendChild(copyBtn);
+        trafficLogContainer.appendChild(row);
+      });
+    });
+  }
+
+  // Expose refresh functions for the menu click handler
   return {
-    refreshAuditLogDisplay: refreshAuditLogDisplay
+    refreshAuditLogDisplay: refreshAuditLogDisplay,
+    refreshTrafficLogDisplay: refreshTrafficLogDisplay
   };
 };

@@ -14,6 +14,13 @@ window.KHackBar.Config = {
   // --- Audit ---
   MAX_AUDIT_LOGS: 500,     // max audit log entries retained
 
+  // --- Traffic Log ---
+  // Popup-side display cap only. background.js keeps its own local copy of
+  // this same number (TRAFFIC_LOG_MAX_ENTRIES near the end of that file) —
+  // it cannot load this file: it's a bare service worker with no `window`
+  // global, so `window.KHackBar.Config = ...` above would throw there.
+  MAX_TRAFFIC_LOG_ENTRIES: 300, // max traffic-log entries retained
+
   // --- Settings / Config ---
   CONFIG_RELOAD_DELAY: 500, // ms delay before page reload after config import
 

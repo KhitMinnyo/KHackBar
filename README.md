@@ -1,8 +1,8 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.4 Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.5 Pro**
 
-> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.4** (Login & Set Auth token helper, POST response-body view — authenticated SSRF/IDOR testing without `curl | jq`)
+> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.5** (API Traffic Log — see the real backend URL behind an SPA route)
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -49,6 +49,16 @@ Built-in encoding/decoding tools that transform the **selected text** in the URL
 - **HTML Entity** encode/decode
 - **Unicode** escape/unescape
 - **Reverse**
+
+---
+
+## 🆕 What's New in v2.5
+
+### 🕵️ API Traffic Log — see the real backend URL behind an SPA route
+Many apps show one URL in the address bar (`/app/profile/5`) while the page's own `fetch()`/XHR calls a different backend endpoint behind the scenes (`/api/v1/users/5`) — invisible until now. In **Settings → API Traffic Log**, turn on **Log background API calls (fetch/XHR) from active tab** (off by default, independent of *Auto-capture POST*) and every background request the active tab makes — any HTTP method — is logged with its method, URL, and time into a capped, scrollable list (300 entries), same layout as Audit Logs. Each row has a **Copy** button to grab the URL straight into the main URL box, the API tab, or Intruder.
+
+### 🔧 Fixed: version number could drift out of sync
+The side panel's title used to hardcode its own copy of the version number, separate from `manifest.json` — easy to update one and forget the other. It now reads `manifest.json`'s version at runtime, so there's a single source of truth.
 
 ---
 
