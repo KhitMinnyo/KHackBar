@@ -1013,6 +1013,25 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   })();
 
+  // Live updates while the panel is open — mirrors the POST-capture
+  // listener in section 3 above (chrome.runtime.onMessage can carry any
+  // number of independent listeners, so this stays fully separate from
+  // that one). Debounced: an SPA route can fire a burst of fetch/XHR calls
+  // within the same tick, and each would otherwise trigger its own full
+  // storage read + list rebuild in refreshTrafficLogDisplay(). 200ms is
+  // short enough to still feel live to a person watching the panel.
+  (function () {
+    var trafficRefreshTimer = null;
+    chrome.runtime.onMessage.addListener(function (message) {
+      if (!message || message.type !== 'traffic_captured') return;
+      if (trafficRefreshTimer) clearTimeout(trafficRefreshTimer);
+      trafficRefreshTimer = setTimeout(function () {
+        trafficRefreshTimer = null;
+        if (settingsApi && settingsApi.refreshTrafficLogDisplay) settingsApi.refreshTrafficLogDisplay();
+      }, 200);
+    });
+  })();
+
   // ============================================================
   // 10. Update version display
   // ============================================================

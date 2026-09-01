@@ -234,11 +234,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
         const activeId = tabs && tabs[0] ? tabs[0].id : null;
         if (activeId !== null && tabId !== activeId) return;
-        appendTrafficLogEntry({
+        const entry = {
           timestamp: d.timeStamp || Date.now(),
           method: (d.method || 'GET').toUpperCase(),
           url: d.url,
           tabId: tabId
+        };
+        appendTrafficLogEntry(entry);
+        // Live-push to the panel, mirroring captured_post_from_page's
+        // post_captured broadcast above. Without this the list only ever
+        // refreshed when the Settings tab was (re)opened — so anything
+        // captured while the panel was already sitting open on Settings
+        // silently landed in storage and only showed up after closing and
+        // reopening the panel. No-op (swallowed lastError) when no panel is
+        // open to receive it, same as the POST broadcast.
+        chrome.runtime.sendMessage({ type: 'traffic_captured', data: entry }, () => {
+          void chrome.runtime.lastError;
         });
       });
     });

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.7] — 2026-09-01
+
+Makes the Traffic Log added in 2.5 (and cache-fixed in 2.6) update live.
+
+### Fixed
+- **Traffic Log only refreshed when the Settings tab was (re)opened.**
+  Entries were always captured correctly, but the visible list was a
+  one-time snapshot rendered when you clicked into Settings — anything
+  captured while the panel stayed open on that tab sat unseen in storage
+  until you closed and reopened the panel. `background.js` now broadcasts
+  each captured entry (mirroring the existing live-push already used for
+  POST capture) and the panel listens for it, debounced 200ms to collapse a
+  page's burst of fetch/XHR calls into one list rebuild instead of one per
+  request.
+
+---
+
 ## [2.6] — 2026-09-01
 
 Fixes the API Traffic Log added in 2.5: GET (and other non-POST) requests
@@ -428,6 +445,7 @@ and a **Copy as sqlmap** export.
   execution, encoders/decoders, scope enforcement, and audit logging — all in a
   side-panel, Red Team-themed UI on Manifest V3.
 
+[2.7]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.7
 [2.6]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.6
 [2.5]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.5
 [2.4]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.4
