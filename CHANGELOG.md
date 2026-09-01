@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.6] — 2026-09-01
+
+Fixes the API Traffic Log added in 2.5: GET (and other non-POST) requests
+served from cache were never appearing.
+
+### Fixed
+- **Traffic Log missed GET requests served from cache.** 2.5 fed the Traffic
+  Log from a `chrome.webRequest.onBeforeRequest` listener — a network-layer
+  hook that never fires for a request served from the browser's HTTP cache
+  or from a service worker's Cache Storage. Cache Storage can only ever hold
+  GET responses (`Cache.put()` throws for any other method), so this hit
+  GET specifically and hardest: revisit a page whose API response was
+  already cached, and the request vanished from the log entirely. POST
+  looked fine only because POST is separately captured by the extension's
+  existing in-page `fetch()`/`XMLHttpRequest` wrapper (`capture-main.js`),
+  which fires the instant the page *calls* fetch/XHR — before the browser
+  decides whether to serve it from cache. The Traffic Log now reuses that
+  same wrapper for every HTTP method instead of the `webRequest` listener,
+  which is removed. Same toggle, same active-tab scoping, same 300-entry
+  cap — only the capture point changed.
+
+---
+
 ## [2.5] — 2026-09-01
 
 Adds a passive **API Traffic Log** — see the real backend URL an SPA calls
@@ -405,6 +428,7 @@ and a **Copy as sqlmap** export.
   execution, encoders/decoders, scope enforcement, and audit logging — all in a
   side-panel, Red Team-themed UI on Manifest V3.
 
+[2.6]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.6
 [2.5]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.5
 [2.4]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.4
 [2.3]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.3

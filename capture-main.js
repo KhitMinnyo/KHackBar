@@ -1,11 +1,18 @@
 // ============================================================
-// capture-main.js — POST capture (MAIN world)
+// capture-main.js — POST capture + Traffic Log (MAIN world)
 // ============================================================
 // Runs in the page's own JavaScript world (not the isolated content-script
 // world), so it can wrap the page's real fetch() and XMLHttpRequest and see
-// SPA / AJAX logins. It cannot use chrome.* APIs, so it reports captures via
-// window.postMessage; capture-content.js (isolated world) relays them to the
-// background worker.
+// SPA / AJAX logins — and, separately, every fetch()/XHR call regardless of
+// method, for the Traffic Log. It cannot use chrome.* APIs, so it reports
+// captures via window.postMessage; capture-content.js (isolated world)
+// relays them to the background worker.
+//
+// Wrapping fetch/XHR here means a call is seen the moment the page makes
+// it — before the browser (or a service worker) decides whether to serve it
+// from cache. That's what makes the Traffic Log side of this cache-immune:
+// a chrome.webRequest listener, by contrast, never fires for a request that
+// never reaches the network stack.
 
 (function () {
   'use strict';
@@ -19,6 +26,20 @@
         url: String(url || location.href),
         body: body,
         contentType: contentType || 'application/x-www-form-urlencoded'
+      }, '*');
+    } catch (e) {}
+  }
+
+  // Traffic Log: reports EVERY fetch()/XHR call (any method, method+URL
+  // only, no body) so the Settings-panel log can show it — independent of,
+  // and in addition to, the POST-only report() above. Called unconditionally
+  // before the real fetch/XHR fires.
+  function reportTraffic(url, method) {
+    try {
+      window.postMessage({
+        __khackbar_traffic: true,
+        url: String(url || location.href),
+        method: String(method || 'GET').toUpperCase()
       }, '*');
     } catch (e) {}
   }
@@ -47,6 +68,7 @@
       try {
         var url = (typeof input === 'string') ? input : (input && input.url);
         var method = (init && init.method) || (input && input.method) || 'GET';
+        reportTraffic(url, method);
         if (String(method).toUpperCase() === 'POST') {
           var body = init && init.body;
           var ct = headerValue(init && init.headers, 'content-type');
@@ -109,6 +131,7 @@
     };
     XHR.prototype.send = function (body) {
       try {
+        reportTraffic(this.__khb_url, this.__khb_method);
         if (this.__khb_method && String(this.__khb_method).toUpperCase() === 'POST') {
           report(this.__khb_url, body, this.__khb_ct);
         }

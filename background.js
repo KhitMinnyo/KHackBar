@@ -206,6 +206,45 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  // ---- Traffic Log: any-method fetch/XHR reported by the in-page content
+  // script (capture-main.js), relayed here by capture-content.js ----
+  // This used to be fed by a second chrome.webRequest.onBeforeRequest
+  // listener (network layer, see the "API Traffic Log" section near the end
+  // of this file). That missed any GET served from the browser's HTTP cache
+  // or from a service worker's Cache Storage — which, structurally, can only
+  // ever hold GET responses (Cache.put() throws for other methods) — because
+  // a cache hit never reaches the network stack webRequest observes. A
+  // revisited SPA route showed nothing. POST looked unaffected only because
+  // it's captured here too, at the page's own fetch()/XHR call — before the
+  // browser decides whether to serve it from cache — the same reliable
+  // mechanism captured_post_from_page above has always used. Reusing it for
+  // every method (not just POST) closes the gap.
+  if (message.type === 'captured_traffic_from_page') {
+    const d = message.data || {};
+    if (!d.url) return false;
+    const tabId = (sender && sender.tab) ? sender.tab.id : -1;
+    // -1 means this isn't tied to a browser tab — shouldn't happen for a
+    // content-script sender, but stay consistent with the same guard used
+    // elsewhere in this file.
+    if (tabId < 0) return false;
+    chrome.storage.local.get(['capture_traffic_enabled'], (res) => {
+      if (!res || !res.capture_traffic_enabled) return;
+      // Only log the currently active/focused tab — avoids silently logging
+      // background-tab traffic unrelated to what the user is looking at.
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+        const activeId = tabs && tabs[0] ? tabs[0].id : null;
+        if (activeId !== null && tabId !== activeId) return;
+        appendTrafficLogEntry({
+          timestamp: d.timeStamp || Date.now(),
+          method: (d.method || 'GET').toUpperCase(),
+          url: d.url,
+          tabId: tabId
+        });
+      });
+    });
+    return false;
+  }
+
   if (message.type === 'execute_post') {
     runSimplePost(message).then(sendResponse);
     return true; // keep channel open for async sendResponse
@@ -685,18 +724,12 @@ chrome.webRequest.onErrorOccurred.addListener(
 // Capture above only ever looks at POST); this logs method+URL for every
 // background request the active tab makes, of any method.
 //
-// Deliberately a SEPARATE listener registration from the POST Capture
-// listeners above, not an added branch inside them — not one line above
-// this point changes. Chrome supports multiple independent listeners on
-// the same webRequest event, so this stays fully isolated from the
-// POST-capture pipeline's state (pendingPostCaptures, etc).
-//
-// Also deliberately simpler than the POST pipeline's two-stage
-// (onBeforeRequest + onSendHeaders) design: that split exists only because
-// Content-Type isn't available until onSendHeaders. This feature only needs
-// {timestamp, method, url, tabId} — all present on the base onBeforeRequest
-// `details` object with no extra opt-in — so there's no pending-requestId
-// Map and no stale-entry cleanup to maintain.
+// The actual capture happens in the 'captured_traffic_from_page' handler
+// above — fed by capture-main.js/capture-content.js, the same in-page
+// content-script mechanism POST Capture uses — NOT a chrome.webRequest
+// listener. An earlier version of this feature used a second
+// onBeforeRequest listener here; see the comment on that handler above for
+// why that missed cache-served GETs and was replaced.
 //
 // Note: a request is logged the moment it's *attempted*, even if it later
 // fails (CORS-blocked, aborted, DNS error). For a recon tool that's a
@@ -719,38 +752,3 @@ function appendTrafficLogEntry(entry) {
     });
   });
 }
-
-chrome.webRequest.onBeforeRequest.addListener(
-  (details) => {
-    // -1 (or any negative tabId) means this request isn't tied to a browser
-    // tab — e.g. KHackBar's own EXECUTE/POST/Fuzzer/Intruder/API-tab calls,
-    // which run from this service worker itself, not a tab. Without this
-    // guard the panel would end up logging its own outgoing test traffic as
-    // if it were the page's. Same guard the POST pipeline uses
-    // (pending.tabId < 0).
-    if (details.tabId < 0) return;
-
-    // Freshly read on every request, never cached in a module variable —
-    // same reasoning as the POST pipeline: the MV3 service worker can sleep
-    // and wake on the very event that needs this check.
-    chrome.storage.local.get(['capture_traffic_enabled'], (res) => {
-      if (!res || !res.capture_traffic_enabled) return;
-
-      // Only log the currently active/focused tab, same as POST capture —
-      // avoids silently logging background-tab traffic unrelated to what
-      // the user is actually looking at.
-      chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
-        const activeId = tabs && tabs[0] ? tabs[0].id : null;
-        if (activeId !== null && details.tabId !== activeId) return;
-
-        appendTrafficLogEntry({
-          timestamp: details.timeStamp || Date.now(),
-          method: details.method,
-          url: details.url,
-          tabId: details.tabId
-        });
-      });
-    });
-  },
-  { urls: ['<all_urls>'], types: ['xmlhttprequest'] }
-);

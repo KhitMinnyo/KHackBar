@@ -1,18 +1,24 @@
 // ============================================================
-// capture-content.js — POST capture (isolated world)
+// capture-content.js — POST capture + Traffic Log (isolated world)
 // ============================================================
-// Runs in every page at document_start. Captures POST requests directly in
-// the page and forwards them to the background worker. This is reliable even
-// when the MV3 service worker was asleep, because chrome.runtime.sendMessage
-// wakes it — unlike webRequest observation, which can miss requests entirely
-// while the worker is stopped.
+// Runs in every page at document_start. Captures POST requests (for replay)
+// and, separately, every fetch()/XHR call's method+URL (for the read-only
+// Traffic Log), forwarding both to the background worker. This in-page
+// approach is reliable even when the MV3 service worker was asleep, because
+// chrome.runtime.sendMessage wakes it — and, for the Traffic Log
+// specifically, even when the browser (or a service worker) serves the
+// request from cache: the page still calls fetch()/XHR either way, so
+// capture-main.js (which wraps them) still sees it, unlike a
+// chrome.webRequest listener, which never fires for a request the network
+// stack never actually makes.
 //
-// Two sources are covered:
+// Sources covered:
 //   1. Native <form method="POST"> submissions — captured here via the
 //      bubbling 'submit' event (the classic login-form case).
-//   2. fetch() / XMLHttpRequest POSTs — captured by capture-main.js, which
+//   2. fetch() / XMLHttpRequest calls — captured by capture-main.js, which
 //      runs in the page's MAIN world (it can see the page's own fetch/XHR)
-//      and hands the data to us via window.postMessage.
+//      and hands the data to us via window.postMessage: POST bodies for
+//      replay, and every call's method+URL for the Traffic Log.
 
 (function () {
   'use strict';
@@ -30,6 +36,17 @@
           contentType: contentType || 'application/x-www-form-urlencoded',
           timeStamp: Date.now()
         }
+      }, function () { void chrome.runtime.lastError; });
+    } catch (e) { /* extension context gone — ignore */ }
+  }
+
+  function sendTraffic(url, method) {
+    var absolute = url;
+    try { absolute = new URL(url, location.href).href; } catch (e) {}
+    try {
+      chrome.runtime.sendMessage({
+        type: 'captured_traffic_from_page',
+        data: { url: absolute, method: method || 'GET', timeStamp: Date.now() }
       }, function () { void chrome.runtime.lastError; });
     } catch (e) { /* extension context gone — ignore */ }
   }
@@ -70,7 +87,13 @@
   window.addEventListener('message', function (ev) {
     if (ev.source !== window) return;
     var d = ev.data;
-    if (!d || d.__khackbar_post !== true) return;
-    send(d.url, d.body, d.contentType);
+    if (!d) return;
+    if (d.__khackbar_post === true) {
+      send(d.url, d.body, d.contentType);
+      return;
+    }
+    if (d.__khackbar_traffic === true) {
+      sendTraffic(d.url, d.method);
+    }
   }, false);
 })();

@@ -1,8 +1,8 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.5 Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.6 Pro**
 
-> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.5** (API Traffic Log — see the real backend URL behind an SPA route)
+> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.6** (fixes the API Traffic Log missing cache-served GET requests)
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -51,6 +51,17 @@ Built-in encoding/decoding tools that transform the **selected text** in the URL
 - **Reverse**
 
 ---
+
+## 🆕 What's New in v2.6
+
+### 🔧 Fixed: API Traffic Log missed GET requests served from cache
+The Traffic Log added in v2.5 was fed by a network-layer `webRequest`
+listener, which never fires for a request the browser (or a service
+worker) serves straight from cache — hitting GET the hardest, since only
+GET responses can be cached at all. It's now fed by the same in-page
+`fetch()`/`XMLHttpRequest` wrapper that already powers POST capture, which
+sees a call the instant the page makes it, regardless of caching. Same
+toggle, same behavior — GET now shows up.
 
 ## 🆕 What's New in v2.5
 
