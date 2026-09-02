@@ -85,11 +85,39 @@
       try {
         var url = (typeof input === 'string') ? input : (input && input.url);
         var method = (init && init.method) || (input && input.method) || 'GET';
-        var body = init && init.body;
-        var ct = headerValue(init && init.headers, 'content-type');
-        reportTraffic(url, method, body, ct);
-        if (String(method).toUpperCase() === 'POST') {
-          report(url, body, ct);
+
+        if (init && typeof init.body !== 'undefined') {
+          // Common case: fetch(url, {method, body, headers, ...}).
+          var body = init.body;
+          var ct = headerValue(init.headers, 'content-type');
+          reportTraffic(url, method, body, ct);
+          if (String(method).toUpperCase() === 'POST') {
+            report(url, body, ct);
+          }
+        } else if (input && typeof input === 'object' && typeof input.clone === 'function') {
+          // fetch(new Request(url, {method, body, headers})) instead of
+          // fetch(url, {...}) — common when a page wraps fetch to inject
+          // an auth header by constructing/cloning a Request. Its body
+          // lives as a stream on the Request object itself, not on `init`
+          // (absent/bodyless here), so it can't be read synchronously the
+          // way init.body can above — this is exactly why method capture
+          // worked (it falls back to input.method) while body silently
+          // didn't (no such fallback existed). Clone before reading:
+          // .clone() gives an independent copy, so consuming it here,
+          // async via .text(), can never race or interfere with the real
+          // fetch's own consumption of the original body via
+          // origFetch.apply() below. Traffic Log only — deliberately not
+          // wired into report()/POST-replay, keeping this fix scoped to
+          // the reported gap.
+          try {
+            var reqCt = (input.headers && typeof input.headers.get === 'function')
+              ? input.headers.get('content-type') : null;
+            input.clone().text().then(function (text) {
+              reportTraffic(url, method, text, reqCt);
+            }).catch(function () {});
+          } catch (e) {}
+        } else {
+          reportTraffic(url, method);
         }
       } catch (e) {}
       return origFetch.apply(this, arguments);

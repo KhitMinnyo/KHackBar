@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.9] — 2026-09-02
+
+Fixes a gap in the body capture added in 2.8: `fetch(new Request(...))`
+calls never showed a body.
+
+### Fixed
+- **Traffic Log body missing specifically for `fetch(new Request(...))`
+  calls.** 2.8's fetch wrapper only read a body off `init.body` — the
+  `fetch(url, {method, body, headers})` form. A page that instead builds a
+  `Request` object and calls `fetch(request)` (common when a fetch wrapper
+  injects an `Authorization` header by constructing/cloning a Request, as
+  confirmed against a real PUT that updates a profile bio) carries its body
+  as a stream on the Request itself — `init` is absent, so there was
+  nothing for `init.body` to find. Method still showed correctly in these
+  cases (it has a fallback to `input.method`); body silently didn't (no
+  equivalent fallback existed). Fixed by cloning the Request and reading
+  its body asynchronously via `.clone().text()` — cloning first means this
+  can never race or interfere with the real fetch's own consumption of the
+  original body. Traffic Log only; the POST-capture/replay pipeline is
+  unchanged.
+
+---
+
 ## [2.8] — 2026-09-02
 
 Extends the API Traffic Log to show request bodies — the missing piece for
@@ -469,6 +492,7 @@ and a **Copy as sqlmap** export.
   execution, encoders/decoders, scope enforcement, and audit logging — all in a
   side-panel, Red Team-themed UI on Manifest V3.
 
+[2.9]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.9
 [2.8]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.8
 [2.7]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.7
 [2.6]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.6

@@ -1,8 +1,8 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.8 Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.9 Pro**
 
-> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.8** (API Traffic Log now shows request bodies — PUT/PATCH included)
+> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.9** (Traffic Log body capture now also covers `fetch(new Request(...))` calls)
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -51,6 +51,17 @@ Built-in encoding/decoding tools that transform the **selected text** in the URL
 - **Reverse**
 
 ---
+
+## 🆕 What's New in v2.9
+
+### 🔧 Fixed: Traffic Log body missing for `fetch(new Request(...))` calls
+v2.8's body capture only read `init.body` — the `fetch(url, {body, ...})`
+form. A page that instead does `fetch(new Request(url, {body, ...}))`
+(common when a fetch wrapper injects an auth header) carries its body as a
+stream on the Request object, which `init.body` can't see. Now captured by
+cloning the Request and reading the clone asynchronously, so it can never
+interfere with the real request. PUT/PATCH calls built this way — like a
+profile bio update — now show their body correctly.
 
 ## 🆕 What's New in v2.8
 
