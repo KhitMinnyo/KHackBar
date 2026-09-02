@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.8] — 2026-09-02
+
+Extends the API Traffic Log to show request bodies — the missing piece for
+PUT/PATCH calls (a bio update, say) where the URL showed up but the payload
+didn't.
+
+### Added
+- **Traffic Log entries now include the request body, for any method.**
+  Previously the log only ever recorded method + URL — POST bodies were
+  visible via the separate "Auto-capture POST" slot, but PUT, PATCH, and
+  any other data-carrying call had no body visibility anywhere. Capture is
+  no longer POST-special-cased: any `fetch()`/`XHR` call with a plain
+  string body (same "readable bodies only" rule POST-capture already used —
+  FormData/Blob/binary bodies still won't show one) gets it recorded,
+  capped at 8KB per entry (truncated beyond that) to keep
+  `chrome.storage.local` usage bounded across 300 entries. Rows with a body
+  get a **▸ Body** toggle (showing the content-type when known) that
+  expands a scrollable, JSON-pretty-printed-when-applicable view with its
+  own **Copy Body** button — rows without one (most GETs) look exactly as
+  before. The existing POST-capture/replay pipeline is untouched; this is
+  additive to the Traffic Log only.
+
+---
+
 ## [2.7] — 2026-09-01
 
 Makes the Traffic Log added in 2.5 (and cache-fixed in 2.6) update live.
@@ -445,6 +469,7 @@ and a **Copy as sqlmap** export.
   execution, encoders/decoders, scope enforcement, and audit logging — all in a
   side-panel, Red Team-themed UI on Manifest V3.
 
+[2.8]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.8
 [2.7]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.7
 [2.6]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.6
 [2.5]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.5

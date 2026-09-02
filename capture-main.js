@@ -30,17 +30,34 @@
     } catch (e) {}
   }
 
-  // Traffic Log: reports EVERY fetch()/XHR call (any method, method+URL
-  // only, no body) so the Settings-panel log can show it — independent of,
-  // and in addition to, the POST-only report() above. Called unconditionally
-  // before the real fetch/XHR fires.
-  function reportTraffic(url, method) {
+  // Cap on the body text carried in a Traffic Log entry — keeps a single
+  // large payload (e.g. a big JSON blob) from bloating chrome.storage.local
+  // across 300 entries. background.js applies the same cap independently
+  // (defense in depth, in case this one changes later) — see the comment
+  // there.
+  var TRAFFIC_BODY_MAX_CHARS = 8192;
+
+  // Traffic Log: reports EVERY fetch()/XHR call (any method) so the
+  // Settings-panel log can show it — independent of, and in addition to,
+  // the POST-only report() above, which feeds a different feature (the
+  // single-slot "last captured POST" used for auto-fill/replay). Body is
+  // included only when it's a plain string (same "only readable string
+  // bodies" rule report() already uses — FormData/Blob/binary bodies won't
+  // show one). Called unconditionally before the real fetch/XHR fires.
+  function reportTraffic(url, method, body, contentType) {
     try {
-      window.postMessage({
+      var msg = {
         __khackbar_traffic: true,
         url: String(url || location.href),
         method: String(method || 'GET').toUpperCase()
-      }, '*');
+      };
+      if (typeof body === 'string' && body) {
+        msg.body = body.length > TRAFFIC_BODY_MAX_CHARS
+          ? body.slice(0, TRAFFIC_BODY_MAX_CHARS) + '… [truncated]'
+          : body;
+        if (contentType) msg.contentType = contentType;
+      }
+      window.postMessage(msg, '*');
     } catch (e) {}
   }
 
@@ -68,10 +85,10 @@
       try {
         var url = (typeof input === 'string') ? input : (input && input.url);
         var method = (init && init.method) || (input && input.method) || 'GET';
-        reportTraffic(url, method);
+        var body = init && init.body;
+        var ct = headerValue(init && init.headers, 'content-type');
+        reportTraffic(url, method, body, ct);
         if (String(method).toUpperCase() === 'POST') {
-          var body = init && init.body;
-          var ct = headerValue(init && init.headers, 'content-type');
           report(url, body, ct);
         }
       } catch (e) {}
@@ -131,7 +148,7 @@
     };
     XHR.prototype.send = function (body) {
       try {
-        reportTraffic(this.__khb_url, this.__khb_method);
+        reportTraffic(this.__khb_url, this.__khb_method, body, this.__khb_ct);
         if (this.__khb_method && String(this.__khb_method).toUpperCase() === 'POST') {
           report(this.__khb_url, body, this.__khb_ct);
         }

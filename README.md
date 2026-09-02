@@ -1,8 +1,8 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.7 Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.8 Pro**
 
-> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.7** (API Traffic Log now updates live while the panel is open)
+> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.8** (API Traffic Log now shows request bodies — PUT/PATCH included)
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -51,6 +51,17 @@ Built-in encoding/decoding tools that transform the **selected text** in the URL
 - **Reverse**
 
 ---
+
+## 🆕 What's New in v2.8
+
+### 📦 Traffic Log now shows request bodies (PUT/PATCH included)
+The log used to record method + URL only — a PUT to update a bio, or any
+other non-POST call, showed up but its payload didn't. Any `fetch()`/XHR
+call with a plain-text body (JSON, form-urlencoded, etc. — same as
+POST-capture always required) now gets it recorded too, capped at 8KB.
+Rows with a body get a **▸ Body** toggle showing the content-type, which
+expands a scrollable, JSON-pretty-printed view with its own **Copy Body**
+button. Rows without a body look exactly as before.
 
 ## 🆕 What's New in v2.7
 

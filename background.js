@@ -240,6 +240,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           url: d.url,
           tabId: tabId
         };
+        // Body is optional — most methods (GET, and anything without a
+        // readable string body) won't have one. Re-capped defensively here
+        // even though capture-main.js already truncates before sending, in
+        // case that layer changes later (see TRAFFIC_BODY_MAX_ENTRY_CHARS).
+        if (typeof d.body === 'string' && d.body) {
+          entry.body = d.body.length > TRAFFIC_BODY_MAX_ENTRY_CHARS
+            ? d.body.slice(0, TRAFFIC_BODY_MAX_ENTRY_CHARS) + '… [truncated]'
+            : d.body;
+          if (d.contentType) entry.contentType = d.contentType;
+        }
         appendTrafficLogEntry(entry);
         // Live-push to the panel, mirroring captured_post_from_page's
         // post_captured broadcast above. Without this the list only ever
@@ -751,6 +761,11 @@ chrome.webRequest.onErrorOccurred.addListener(
 // by hand — duplicated, not shared, because this file cannot load config.js
 // (see the comment there).
 const TRAFFIC_LOG_MAX_ENTRIES = 300;
+
+// Same cap capture-main.js already applies to a body before it ever leaves
+// the page (see the comment there) — duplicated here as a second,
+// independent backstop, same reasoning as TRAFFIC_LOG_MAX_ENTRIES above.
+const TRAFFIC_BODY_MAX_ENTRY_CHARS = 8192;
 
 function appendTrafficLogEntry(entry) {
   chrome.storage.local.get(['traffic_logs'], (res) => {

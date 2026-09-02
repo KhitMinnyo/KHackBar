@@ -40,13 +40,18 @@
     } catch (e) { /* extension context gone — ignore */ }
   }
 
-  function sendTraffic(url, method) {
+  function sendTraffic(url, method, body, contentType) {
     var absolute = url;
     try { absolute = new URL(url, location.href).href; } catch (e) {}
     try {
+      var data = { url: absolute, method: method || 'GET', timeStamp: Date.now() };
+      if (typeof body === 'string' && body) {
+        data.body = body;
+        if (contentType) data.contentType = contentType;
+      }
       chrome.runtime.sendMessage({
         type: 'captured_traffic_from_page',
-        data: { url: absolute, method: method || 'GET', timeStamp: Date.now() }
+        data: data
       }, function () { void chrome.runtime.lastError; });
     } catch (e) { /* extension context gone — ignore */ }
   }
@@ -93,7 +98,7 @@
       return;
     }
     if (d.__khackbar_traffic === true) {
-      sendTraffic(d.url, d.method);
+      sendTraffic(d.url, d.method, d.body, d.contentType);
     }
   }, false);
 })();

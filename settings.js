@@ -130,7 +130,9 @@ window.KHackBar.Settings.init = function (opts) {
     audit_logs: function (v) { return Array.isArray(v); },
     traffic_logs: function (v) {
       return Array.isArray(v) && v.every(function (e) {
-        return e && typeof e === 'object' && typeof e.url === 'string' && typeof e.method === 'string';
+        return e && typeof e === 'object' && typeof e.url === 'string' && typeof e.method === 'string' &&
+          (e.body === undefined || typeof e.body === 'string') &&
+          (e.contentType === undefined || typeof e.contentType === 'string');
       });
     },
     last_captured_post: function (v) {
@@ -332,12 +334,18 @@ window.KHackBar.Settings.init = function (opts) {
       // Show latest entries first, same convention as the audit log.
       var reversed = logs.slice().reverse();
       reversed.forEach(function (entry) {
+        // A row that has a body gets wrapped together with its (initially
+        // collapsed) body block so the divider line lands after the body
+        // too, not between the row and its own body. A bodyless row (most
+        // GETs) renders identically to before — wrapper is just the row.
+        var wrapper = document.createElement('div');
+        wrapper.style.borderBottom = '1px solid #3f3f3f';
+
         var row = document.createElement('div');
         row.style.display = 'flex';
         row.style.alignItems = 'center';
         row.style.gap = '4px';
         row.style.padding = '3px';
-        row.style.borderBottom = '1px solid #3f3f3f';
         row.style.fontSize = '9px';
         row.style.lineHeight = '1.4';
 
@@ -379,8 +387,71 @@ window.KHackBar.Settings.init = function (opts) {
         row.appendChild(timeSpan);
         row.appendChild(methodSpan);
         row.appendChild(urlSpan);
+
+        // ---- Body preview (PUT/PATCH/POST/etc. with a readable body) ----
+        var hasBody = typeof entry.body === 'string' && entry.body.length > 0;
+        if (hasBody) {
+          var shortType = entry.contentType ? entry.contentType.split(';')[0].trim() : '';
+          var label = function (open) { return (open ? '▾ Body' : '▸ Body') + (shortType ? ' (' + shortType + ')' : ''); };
+
+          var bodyBlock = document.createElement('div');
+          bodyBlock.style.display = 'none';
+          bodyBlock.style.padding = '2px 4px 6px 4px';
+          bodyBlock.style.background = '#0a0a0a';
+
+          var bodyPre = document.createElement('pre');
+          bodyPre.style.margin = '0 0 4px 0';
+          bodyPre.style.whiteSpace = 'pre-wrap';
+          bodyPre.style.wordBreak = 'break-all';
+          bodyPre.style.color = '#e5e5e5';
+          bodyPre.style.fontFamily = 'inherit';
+          bodyPre.style.fontSize = '9px';
+          bodyPre.style.maxHeight = '150px';
+          bodyPre.style.overflowY = 'auto';
+          // Pretty-print JSON bodies for readability; anything that isn't
+          // valid JSON (including a body truncated mid-object) falls back
+          // to the raw text untouched.
+          var displayBody = entry.body;
+          try {
+            if (shortType.toLowerCase().indexOf('json') !== -1) {
+              displayBody = JSON.stringify(JSON.parse(entry.body), null, 2);
+            }
+          } catch (e) { /* not valid JSON — show as-is */ }
+          bodyPre.textContent = displayBody;
+
+          var copyBodyBtn = document.createElement('button');
+          copyBodyBtn.className = 'small-btn';
+          copyBodyBtn.textContent = 'Copy Body';
+          copyBodyBtn.style.fontSize = '9px';
+          copyBodyBtn.onclick = function () {
+            if (!navigator.clipboard) return;
+            var entryBody = entry.body || '';
+            navigator.clipboard.writeText(entryBody)
+              .then(function () { window.KHackBar.UI.setText(status, '[+] Copied body (' + entryBody.length + ' chars).'); })
+              .catch(function () { window.KHackBar.UI.setText(status, '[!] Copy failed.'); });
+          };
+
+          bodyBlock.appendChild(bodyPre);
+          bodyBlock.appendChild(copyBodyBtn);
+
+          var bodyToggleBtn = document.createElement('button');
+          bodyToggleBtn.className = 'small-btn';
+          bodyToggleBtn.textContent = label(false);
+          bodyToggleBtn.style.fontSize = '9px';
+          bodyToggleBtn.style.flex = '0 0 auto';
+          bodyToggleBtn.onclick = function () {
+            var opening = bodyBlock.style.display === 'none';
+            bodyBlock.style.display = opening ? 'block' : 'none';
+            bodyToggleBtn.textContent = label(opening);
+          };
+
+          row.appendChild(bodyToggleBtn);
+        }
+
         row.appendChild(copyBtn);
-        trafficLogContainer.appendChild(row);
+        wrapper.appendChild(row);
+        if (hasBody) wrapper.appendChild(bodyBlock);
+        trafficLogContainer.appendChild(wrapper);
       });
     });
   }
