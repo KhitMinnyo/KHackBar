@@ -353,6 +353,7 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
   var btnSortLen   = opts.btnSortLen;
   var btnSortStatus = opts.btnSortStatus;
   var btnSortIdx   = opts.btnSortIdx;
+  var btnSortGroup = opts.btnSortGroup;
   var status       = opts.status;
   var logAudit     = opts.logAudit || function () {};
 
@@ -965,7 +966,12 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
       sortState.dir = (sortState.dir === 'desc') ? 'asc' : 'desc';
     } else {
       sortState.key = key;
-      sortState.dir = (key === 'idx') ? 'asc' : 'desc'; // len/status default to desc
+      // len/status default to desc (biggest/highest first). idx defaults to
+      // asc (original order). group defaults to asc too, but for a
+      // different reason: "ascending" there means ascending GROUP SIZE, so
+      // asc = the rarest response-size group first — that's the entire
+      // point of this button, so it has to be what the first click shows.
+      sortState.dir = (key === 'idx' || key === 'group') ? 'asc' : 'desc';
     }
     var dir = sortState.dir;
     var mul = (dir === 'asc') ? -1 : 1; // comparators below are written descending
@@ -981,6 +987,31 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
       arr.sort(function (a, b) {
         return mul * ((b.status || 0) - (a.status || 0)) || (a.idx - b.idx);
       });
+    } else if (key === 'group') {
+      // Cluster identical response lengths together (contiguous), then
+      // order the CLUSTERS by how many members they have — not by the raw
+      // length value, which has no relation to rarity. This is the actual
+      // "find the odd one out" workflow: 20 identical responses, 5 of one
+      // other length, 1 unique length → ascending puts the lone outlier on
+      // top, the group of 5 next, the common group of 20 last, regardless
+      // of what the three length values actually are.
+      var counts = {};
+      arr.forEach(function (r) {
+        var k = (r.length == null ? 'null' : r.length);
+        counts[k] = (counts[k] || 0) + 1;
+      });
+      arr.sort(function (a, b) {
+        var ka = (a.length == null ? 'null' : a.length);
+        var kb = (b.length == null ? 'null' : b.length);
+        var byCount = mul * (counts[kb] - counts[ka]);
+        if (byCount) return byCount;
+        // Tiebreak keeps same-length rows adjacent (never split across the
+        // sort) and preserves original relative order within one exact
+        // group — same idx tiebreak convention as len/status above.
+        var la = (a.length == null ? -1 : a.length);
+        var lb = (b.length == null ? -1 : b.length);
+        return (la - lb) || (a.idx - b.idx);
+      });
     } else {
       // Original order is always by index; toggling reverses it.
       arr.sort(function (a, b) { return mul * (b.idx - a.idx); });
@@ -988,7 +1019,7 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
     arr.forEach(function (r) { results.appendChild(r.row); });
 
     var arrow = (dir === 'asc') ? '↑ ascending' : '↓ descending';
-    var label = key === 'len' ? 'length' : (key === 'status' ? 'status' : 'original order');
+    var label = key === 'len' ? 'length' : (key === 'status' ? 'status' : (key === 'group' ? 'response-size groups — rarest first when ascending' : 'original order'));
     window.KHackBar.UI.setText(status, '[+] Sorted by ' + label + ' (' + arrow + ') — click again to reverse.');
   }
 
@@ -1122,6 +1153,7 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
   if (btnSortLen) btnSortLen.onclick = function () { sortResults('len'); };
   if (btnSortStatus) btnSortStatus.onclick = function () { sortResults('status'); };
   if (btnSortIdx) btnSortIdx.onclick = function () { sortResults('idx'); };
+  if (btnSortGroup) btnSortGroup.onclick = function () { sortResults('group'); };
 
   // ---- Generate CSRF PoC (Burp-style) ----
   function htmlEscapeAttr(s) {

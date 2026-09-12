@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.10] — 2026-09-12
+
+Adds a "Group by size" button to Intruder — the outlier-triage workflow
+KHackBar's existing ⭐ mode-highlighting already supports, extended to
+actually rearrange the list instead of just marking it.
+
+### Added
+- **Intruder: "Group by size (rarest first)" sort button.** Clusters
+  responses with identical byte lengths together (contiguous), then orders
+  the clusters by how many members they have — not by the raw length
+  value, which has no relation to rarity. Example: 20 identical responses,
+  5 of one other length, 1 unique length → ascending puts the lone outlier
+  on top, the group of 5 next, the common group of 20 last, regardless of
+  what the three length values actually are (a plain numeric length sort
+  can't do this — a rare length can just as easily fall in the middle of
+  the numeric range as at either end). Click again to reverse
+  (commonest-first). Pairs naturally with the existing outlier ⭐
+  highlighting: the starred rows are by definition the rarest group, so
+  they float straight to the top. Implemented as a new `'group'` key
+  alongside the existing length/status/original-order sort buttons — same
+  toggle mechanism, same DOM-reordering approach, nothing about the
+  existing sorts changed.
+
+---
+
 ## [2.9] — 2026-09-02
 
 Fixes a gap in the body capture added in 2.8: `fetch(new Request(...))`
@@ -492,6 +517,7 @@ and a **Copy as sqlmap** export.
   execution, encoders/decoders, scope enforcement, and audit logging — all in a
   side-panel, Red Team-themed UI on Manifest V3.
 
+[2.10]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.10
 [2.9]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.9
 [2.8]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.8
 [2.7]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.7

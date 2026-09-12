@@ -944,6 +944,7 @@ document.addEventListener('DOMContentLoaded', function () {
       results: document.getElementById('intruder_results'),
       summary: document.getElementById('intruder_summary'),
       btnSortLen: document.getElementById('btn_intruder_sort_len'),
+      btnSortGroup: document.getElementById('btn_intruder_sort_group'),
       btnSortStatus: document.getElementById('btn_intruder_sort_status'),
       btnSortIdx: document.getElementById('btn_intruder_sort_idx'),
       status: status,

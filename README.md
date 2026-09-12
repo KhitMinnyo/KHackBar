@@ -1,8 +1,8 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.9 Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.10 Pro**
 
-> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.9** (Traffic Log body capture now also covers `fetch(new Request(...))` calls)
+> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.10** (Intruder: "Group by size" button clusters responses and floats the rarest group to the top)
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -51,6 +51,16 @@ Built-in encoding/decoding tools that transform the **selected text** in the URL
 - **Reverse**
 
 ---
+
+## 🆕 What's New in v2.10
+
+### 🔀 Intruder: "Group by size (rarest first)"
+Clusters responses with identical byte lengths together, then orders the
+clusters by rarity instead of by raw length value — 20 identical responses,
+5 of one other length, 1 unique length becomes 1 on top, 5 in the middle,
+20 at the bottom, in one click. Click again to flip to commonest-first.
+Sits next to the existing Sort by length / Sort by status / Original order
+buttons.
 
 ## 🆕 What's New in v2.9
 
