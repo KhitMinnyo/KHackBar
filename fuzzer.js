@@ -362,7 +362,7 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
 
   if (!attackTypeEl || !urlEl || !bodyEl || !btnStart || !setsWrap) return;
 
-  var MAX_REQUESTS = 5000; // safety cap to avoid runaway combinatorial blasts
+  var MAX_REQUESTS = 200000; // safety cap to avoid runaway combinatorial blasts (raised to allow rockyou.txt-scale wordlists)
   // MARKER, TOK_A/TOK_B, parseMarked() and fillTemplate() now live above,
   // outside this closure (see the comment there) - resolved here via normal
   // JS closure scoping, same behavior as before.
@@ -571,10 +571,10 @@ window.KHackBar.Fuzzer.initIntruder = function (opts) {
     input.onchange = function () {
       var file = input.files && input.files[0];
       if (!file) return;
-      var MAX_BYTES = 20 * 1024 * 1024;   // 20 MB read cap
+      var MAX_BYTES = 200 * 1024 * 1024;  // 200 MB read cap (covers rockyou.txt-scale wordlists)
       var MAX_LINES = 200000;             // keep the textarea/engine sane
       if (file.size > MAX_BYTES) {
-        window.KHackBar.UI.setText(status, '[!] File too large (' + Math.round(file.size / 1048576) + ' MB). Cap is 20 MB — split the wordlist.');
+        window.KHackBar.UI.setText(status, '[!] File too large (' + Math.round(file.size / 1048576) + ' MB). Cap is 200 MB — split the wordlist.');
         return;
       }
       var reader = new FileReader();

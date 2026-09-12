@@ -1,8 +1,8 @@
 # 🎯 KHackBar — The Ultimate Web Security Auditor's Sidekick
 
-> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.10 Pro**
+> **Built on Manifest V3** • Red Team Ready • Lightweight & Professional • **v2.11 Pro**
 
-> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.10** (Intruder: "Group by size" button clusters responses and floats the rarest group to the top)
+> 📄 Full version history: [CHANGELOG.md](CHANGELOG.md) — current release: **v2.11** (Intruder: "Load file" now accepts wordlists up to 200 MB, and the attack-size safety cap is raised to 200,000 requests)
 
 **KHackBar** is a modular, side-panel-based web security testing extension for Google Chrome. Designed for penetration testers, bug bounty hunters, and security researchers, it provides a comprehensive arsenal of payloads, encoders, request modifiers, and cookie manipulation tools — all within a sleek Red Team-themed interface. The extension follows a modular architecture where feature-specific logic is split into dedicated files, keeping the codebase maintainable and reducing the risk of large single-file bugs.
 
@@ -51,6 +51,16 @@ Built-in encoding/decoding tools that transform the **selected text** in the URL
 - **Reverse**
 
 ---
+
+## 🆕 What's New in v2.11
+
+### 🔧 Changed: Intruder "Load file" now handles rockyou.txt-scale wordlists
+The file-load cap is raised from 20 MB to 200 MB, so large real-world
+wordlists load instead of being rejected outright. The attack-size safety
+cap (`MAX_REQUESTS`) is also raised from 5,000 to 200,000 to match — a big
+loaded wordlist no longer just gets blocked again at attack-start by the
+second cap. The 200,000-line cap on the loaded file itself is unchanged, as
+it already matched this ceiling.
 
 ## 🆕 What's New in v2.10
 

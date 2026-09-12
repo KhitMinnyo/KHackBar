@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.11] — 2026-09-12
+
+### Changed
+- Intruder's "Load file" 20 MB read cap is now 200 MB, so wordlists the size
+  of `rockyou.txt` (~139 MB) can actually be loaded instead of being
+  rejected outright.
+- Intruder's attack-size safety cap (`MAX_REQUESTS`) is raised from 5,000 to
+  200,000, so a large loaded wordlist isn't immediately blocked again at
+  attack-start by a second, independent cap. The 200,000-line load cap
+  (`MAX_LINES`) already matched this ceiling and is unchanged.
+
+---
+
 ## [2.10] — 2026-09-12
 
 Adds a "Group by size" button to Intruder — the outlier-triage workflow
@@ -517,6 +530,7 @@ and a **Copy as sqlmap** export.
   execution, encoders/decoders, scope enforcement, and audit logging — all in a
   side-panel, Red Team-themed UI on Manifest V3.
 
+[2.11]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.11
 [2.10]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.10
 [2.9]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.9
 [2.8]: https://github.com/KhitMinnyo/KHackBar/releases/tag/v2.8
