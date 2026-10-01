@@ -154,3 +154,86 @@ window.KHackBar.Headers.saveHeaders = function (container, urlPattern, headers, 
     });
   });
 };
+
+/**
+ * Load and render recent outgoing request headers captured by the background.
+ * @param {HTMLElement} container - The request header log container
+ */
+window.KHackBar.Headers.refreshRequestLog = function (container) {
+  if (!container) return;
+
+  chrome.storage.local.get(['request_header_logs'], function (result) {
+    while (container.firstChild) container.removeChild(container.firstChild);
+    var entries = result.request_header_logs || [];
+    if (!entries.length) {
+      var empty = document.createElement('div');
+      empty.style.color = '#a3a3a3';
+      empty.style.padding = '4px';
+      empty.textContent = 'No request headers captured. Enable capture, then browse or reload the target tab.';
+      container.appendChild(empty);
+      return;
+    }
+
+    entries.slice().reverse().forEach(function (entry) {
+      var wrapper = document.createElement('div');
+      wrapper.style.borderBottom = '1px solid #3f3f3f';
+
+      var row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.alignItems = 'center';
+      row.style.gap = '4px';
+      row.style.padding = '4px 2px';
+
+      var details = document.createElement('span');
+      details.style.flex = '1';
+      details.style.minWidth = '0';
+      details.style.wordBreak = 'break-all';
+      var time = '--:--:--';
+      try { time = new Date(entry.timestamp).toLocaleTimeString(); } catch (e) {}
+      details.textContent = time + ' [' + (entry.method || '?') + ']' + (entry.type ? ' [' + entry.type + ']' : '') + ' ' + (entry.url || '');
+      details.title = entry.url || '';
+
+      var headers = Array.isArray(entry.headers) ? entry.headers : [];
+      var block = document.createElement('pre');
+      block.style.display = 'none';
+      block.style.whiteSpace = 'pre-wrap';
+      block.style.wordBreak = 'break-all';
+      block.style.maxHeight = '160px';
+      block.style.overflowY = 'auto';
+      block.style.margin = '0';
+      block.style.padding = '5px';
+      block.style.background = '#111';
+      block.style.color = '#e5e5e5';
+      block.textContent = headers.map(function (header) {
+        return header.name + ': ' + (header.value || '');
+      }).join('\n');
+
+      var toggle = document.createElement('button');
+      toggle.className = 'small-btn';
+      toggle.style.fontSize = '9px';
+      toggle.textContent = '▸ Headers (' + headers.length + ')';
+      toggle.onclick = function () {
+        var opening = block.style.display === 'none';
+        block.style.display = opening ? 'block' : 'none';
+        toggle.textContent = (opening ? '▾' : '▸') + ' Headers (' + headers.length + ')';
+      };
+
+      var copy = document.createElement('button');
+      copy.className = 'small-btn';
+      copy.style.fontSize = '9px';
+      copy.textContent = 'Copy';
+      copy.onclick = function () {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(block.textContent).catch(function () {});
+        }
+      };
+
+      row.appendChild(details);
+      row.appendChild(toggle);
+      row.appendChild(copy);
+      wrapper.appendChild(row);
+      wrapper.appendChild(block);
+      container.appendChild(wrapper);
+    });
+  });
+};

@@ -91,6 +91,10 @@ window.KHackBar.Settings.init = function (opts) {
   if (btnExportConfig) {
     btnExportConfig.onclick = function () {
       chrome.storage.local.get(null, function (data) {
+        // Request-header history can contain credentials and session cookies;
+        // never bundle it (or its opt-in switch) into a shareable config file.
+        delete data.request_header_logs;
+        delete data.capture_request_headers_enabled;
         var config = {
           version: 1,
           exportedAt: new Date().toISOString(),
@@ -121,6 +125,7 @@ window.KHackBar.Settings.init = function (opts) {
     scope_enabled: function (v) { return typeof v === 'boolean'; },
     capture_post_enabled: function (v) { return typeof v === 'boolean'; },
     capture_traffic_enabled: function (v) { return typeof v === 'boolean'; },
+    capture_request_headers_enabled: function (v) { return typeof v === 'boolean'; },
     header_url_pattern: function (v) { return typeof v === 'string'; },
     custom_headers: function (v) {
       return Array.isArray(v) && v.every(function (h) {
@@ -133,6 +138,14 @@ window.KHackBar.Settings.init = function (opts) {
         return e && typeof e === 'object' && typeof e.url === 'string' && typeof e.method === 'string' &&
           (e.body === undefined || typeof e.body === 'string') &&
           (e.contentType === undefined || typeof e.contentType === 'string');
+      });
+    },
+    request_header_logs: function (v) {
+      return Array.isArray(v) && v.every(function (e) {
+        return e && typeof e === 'object' && typeof e.url === 'string' && typeof e.method === 'string' &&
+          typeof e.timestamp === 'number' && Array.isArray(e.headers) && e.headers.every(function (h) {
+            return h && typeof h.name === 'string' && typeof h.value === 'string';
+          });
       });
     },
     last_captured_post: function (v) {

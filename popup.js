@@ -878,6 +878,64 @@ document.addEventListener('DOMContentLoaded', function () {
           });
         };
       }
+
+      var chkCaptureRequestHeaders = document.getElementById('chk_capture_request_headers');
+      var btnClearRequestHeaderLog = document.getElementById('btn_clear_request_header_log');
+      var requestHeaderLogContainer = document.getElementById('request_header_log_container');
+      var headersPanel = document.getElementById('headers_panel');
+      function refreshRequestHeaderLog() {
+        if (headersPanel && headersPanel.style.display === 'none') return;
+        KHackBar.Headers.refreshRequestLog(requestHeaderLogContainer);
+      }
+
+      if (chkCaptureRequestHeaders) {
+        chrome.storage.local.get(['capture_request_headers_enabled'], function (result) {
+          chkCaptureRequestHeaders.checked = !!result.capture_request_headers_enabled;
+        });
+        chkCaptureRequestHeaders.onchange = function () {
+          var enabled = chkCaptureRequestHeaders.checked;
+          chrome.runtime.sendMessage({
+            type: 'set_capture_request_headers_enabled',
+            enabled: enabled
+          }, function (response) {
+            if (chrome.runtime.lastError || !response || !response.success) {
+              setStatus('[!] Could not update request-header capture.');
+              chkCaptureRequestHeaders.checked = !enabled;
+              return;
+            }
+            setStatus(enabled
+              ? '[+] Capturing outgoing headers from the active tab. Sensitive values are included.'
+              : '[+] Request-header capture stopped.');
+          });
+        };
+      }
+
+      if (btnClearRequestHeaderLog) {
+        btnClearRequestHeaderLog.onclick = function () {
+          chrome.storage.local.set({ request_header_logs: [] }, function () {
+            refreshRequestHeaderLog();
+            setStatus('[+] Request-header log cleared.');
+          });
+        };
+      }
+
+      var headersMenuItem = document.getElementById('menu_headers');
+      var requestHeaderRefreshTimer = null;
+      if (headersMenuItem) {
+        headersMenuItem.addEventListener('click', function () {
+          setTimeout(refreshRequestHeaderLog, 100);
+        });
+      }
+      chrome.storage.onChanged.addListener(function (changes, areaName) {
+        if (areaName !== 'local' || !changes.request_header_logs ||
+            (headersPanel && headersPanel.style.display === 'none')) return;
+        if (requestHeaderRefreshTimer) clearTimeout(requestHeaderRefreshTimer);
+        requestHeaderRefreshTimer = setTimeout(function () {
+          requestHeaderRefreshTimer = null;
+          refreshRequestHeaderLog();
+        }, 200);
+      });
+      refreshRequestHeaderLog();
     }
   })();
 

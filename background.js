@@ -174,6 +174,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message.type === 'set_capture_request_headers_enabled') {
+    const enabled = !!message.enabled;
+    chrome.storage.local.set({ capture_request_headers_enabled: enabled }, () => {
+      sendResponse({ success: !chrome.runtime.lastError, enabled: enabled });
+    });
+    return true;
+  }
+
   // ---- POST captured by the in-page content script ----
   // Reliable even when the service worker was asleep: this very message wakes
   // it. Gate on the stored enabled flag, save, and relay to the panel.
@@ -683,6 +691,30 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 chrome.webRequest.onSendHeaders.addListener(
   (details) => {
+    // The HEADERS panel's opt-in request log records the final headers Chrome
+    // is about to send, including declarativeNetRequest modifications.
+    if (details.tabId < 0) return;
+    chrome.storage.local.get(['capture_request_headers_enabled'], (res) => {
+      if (!res || !res.capture_request_headers_enabled) return;
+
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+        const activeId = tabs && tabs[0] ? tabs[0].id : null;
+        if (activeId === null || details.tabId !== activeId) return;
+
+        const headers = (details.requestHeaders || []).map((header) => ({
+          name: header.name,
+          value: typeof header.value === 'string' ? header.value : '[binary value]'
+        }));
+        appendRequestHeaderLogEntry({
+          timestamp: details.timeStamp || Date.now(),
+          method: details.method || 'GET',
+          url: details.url,
+          type: details.type || '',
+          headers: headers
+        });
+      });
+    });
+
     const pending = pendingPostCaptures.get(details.requestId);
     if (!pending) return;
     pendingPostCaptures.delete(details.requestId);
@@ -726,8 +758,8 @@ chrome.webRequest.onSendHeaders.addListener(
       });
     });
   },
-  { urls: ['<all_urls>'], types: ['main_frame', 'sub_frame', 'xmlhttprequest'] },
-  ['requestHeaders']
+  { urls: ['<all_urls>'] },
+  ['requestHeaders', 'extraHeaders']
 );
 
 // Clean up if a pending capture's request errors out before headers are sent.
@@ -766,6 +798,22 @@ const TRAFFIC_LOG_MAX_ENTRIES = 300;
 // the page (see the comment there) — duplicated here as a second,
 // independent backstop, same reasoning as TRAFFIC_LOG_MAX_ENTRIES above.
 const TRAFFIC_BODY_MAX_ENTRY_CHARS = 8192;
+const REQUEST_HEADER_LOG_MAX_ENTRIES = 100;
+let requestHeaderLogWriteQueue = Promise.resolve();
+
+function appendRequestHeaderLogEntry(entry) {
+  requestHeaderLogWriteQueue = requestHeaderLogWriteQueue.catch(() => {}).then(() => new Promise((resolve) => {
+    chrome.storage.local.get(['request_header_logs'], (res) => {
+      const logs = (res && res.request_header_logs) || [];
+      logs.push(entry);
+      chrome.storage.local.set({
+        request_header_logs: logs.length > REQUEST_HEADER_LOG_MAX_ENTRIES
+          ? logs.slice(logs.length - REQUEST_HEADER_LOG_MAX_ENTRIES)
+          : logs
+      }, resolve);
+    });
+  }));
+}
 
 function appendTrafficLogEntry(entry) {
   chrome.storage.local.get(['traffic_logs'], (res) => {

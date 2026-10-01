@@ -496,6 +496,18 @@
       Clear
     </button>
   </div>
+  <div style="width:100%; border-top:1px solid #3f3f3f; margin-top:8px; padding-top:7px;">
+    <div style="font-size:10px; color:#ef4444; margin-bottom:5px;">Request Header History</div>
+    <label style="display:flex; align-items:flex-start; gap:5px; font-size:10px; color:#ef4444; cursor:pointer; user-select:none;">
+      <input type="checkbox" id="chk_capture_request_headers" style="cursor:pointer; margin-top:1px;">
+      Capture headers sent by the active tab
+    </label>
+    <div style="width:100%; font-size:9px; color:#a3a3a3; margin:3px 0 6px;">Off by default. Includes sensitive values such as Cookie and Authorization; the latest 100 requests are stored locally until cleared. Captures network requests after header rules are applied.</div>
+    <div style="display:flex; gap:4px; width:100%; margin-bottom:4px;">
+      <button id="btn_clear_request_header_log" class="action-btn" style="font-size:10px;">Clear Request Log</button>
+    </div>
+    <div id="request_header_log_container" style="width:100%; background:#0a0a0a; border:1px solid #3f3f3f; border-radius:4px; padding:4px; max-height:260px; overflow-y:auto; font-size:9px; font-family:inherit;"></div>
+  </div>
 </div>
 <div id="cookies_panel" class="panel" style="display:none; flex-direction:column;">
   <div style="width:100%; margin-bottom:6px; font-size:10px; color:#ef4444;">Cookie editor — edit a value &amp; <b>Save</b> to inject it live, or <b>Add / inject</b> a new one:</div>
