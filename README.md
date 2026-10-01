@@ -30,12 +30,13 @@ Leverages the **`declarativeNetRequest`** API to:
 - Inject custom headers on-the-fly for testing backend validation logic
 
 The **HEADERS** panel also has an opt-in **Request Header History** for outgoing
-network requests from the active tab. It shows the headers after KHackBar's
-header rules are applied and keeps the latest 100 requests locally. Capture is
-off by default because the log includes sensitive values such as cookies and
-authorization tokens; clear it from the same panel when finished. Requests
-served directly from browser/service-worker cache are not network requests and
-therefore do not appear in this history.
+network requests from the active tab and KHackBar requests that Chrome exposes
+to `webRequest`. It shows the headers after KHackBar's header rules are applied
+and keeps the latest 100 requests locally. Capture is off by default because
+the log includes sensitive values such as cookies and authorization tokens;
+clear it from the same panel when finished. Requests served directly from
+browser/service-worker cache are not network requests and therefore do not
+appear in this history.
 
 ### 🍪 Interactive Cookie Editor
 View, edit, create, and delete cookies in real-time using the **`cookies`** API:

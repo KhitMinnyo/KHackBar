@@ -904,7 +904,7 @@ document.addEventListener('DOMContentLoaded', function () {
               return;
             }
             setStatus(enabled
-              ? '[+] Capturing outgoing headers from the active tab. Sensitive values are included.'
+              ? '[+] Capturing active-tab and KHackBar request headers. Sensitive values are included.'
               : '[+] Request-header capture stopped.');
           });
         };

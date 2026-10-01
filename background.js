@@ -574,6 +574,7 @@ async function clearHeaderRules() {
 async function applyHeaderRules(urlPattern, headers) {
   // First, clear existing custom rules
   await clearHeaderRules();
+  if (!Array.isArray(headers) || headers.length === 0) return;
 
   // Build request header modification objects
   const requestHeaders = headers.map(h => {
@@ -689,18 +690,18 @@ chrome.webRequest.onBeforeRequest.addListener(
   ['requestBody']
 );
 
+const KHACKBAR_ORIGIN = new URL(chrome.runtime.getURL('')).origin;
+
 chrome.webRequest.onSendHeaders.addListener(
   (details) => {
     // The HEADERS panel's opt-in request log records the final headers Chrome
     // is about to send, including declarativeNetRequest modifications.
-    if (details.tabId < 0) return;
+    const isKHackBarRequest = details.initiator === KHACKBAR_ORIGIN;
+    if (details.tabId < 0 && !isKHackBarRequest) return;
     chrome.storage.local.get(['capture_request_headers_enabled'], (res) => {
       if (!res || !res.capture_request_headers_enabled) return;
 
-      chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
-        const activeId = tabs && tabs[0] ? tabs[0].id : null;
-        if (activeId === null || details.tabId !== activeId) return;
-
+      const capture = () => {
         const headers = (details.requestHeaders || []).map((header) => ({
           name: header.name,
           value: typeof header.value === 'string' ? header.value : '[binary value]'
@@ -712,6 +713,17 @@ chrome.webRequest.onSendHeaders.addListener(
           type: details.type || '',
           headers: headers
         });
+      };
+
+      if (isKHackBarRequest) {
+        capture();
+        return;
+      }
+
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+        const activeId = tabs && tabs[0] ? tabs[0].id : null;
+        if (activeId === null || details.tabId !== activeId) return;
+        capture();
       });
     });
 
